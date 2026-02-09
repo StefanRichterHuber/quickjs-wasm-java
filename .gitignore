@@ -1,0 +1,6 @@
+target/
+pom.xml.releaseBackup
+release.properties
+bin/act
+*.log
+src/main/rust/quickjslib/wasm_lib/deser.rs

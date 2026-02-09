@@ -1,0 +1,6 @@
+[workspace]
+members = [
+    "wasm_lib",
+    "wasm_macros",
+]
+
