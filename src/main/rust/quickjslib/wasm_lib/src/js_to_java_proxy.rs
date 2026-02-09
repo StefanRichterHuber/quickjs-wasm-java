@@ -1,13 +1,10 @@
 use std::collections::HashMap;
-use std::sync::LazyLock;
-use std::sync::Mutex;
 
 use rquickjs::function::Args;
 use rquickjs::prelude::IntoArgs;
 use rquickjs::Atom;
 use rquickjs::FromAtom;
 use rquickjs::FromJs;
-use rquickjs::Function;
 use rquickjs::IntoJs;
 use rquickjs::Persistent;
 use rquickjs::Value;
@@ -67,7 +64,7 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 Ok(obj.into_value())
             }
             // TODO implement function
-            JSJavaProxy::Function(name, ptr) => Ok(Value::new_undefined(ctx.clone())),
+            JSJavaProxy::Function(_name, _ptr) => Ok(Value::new_undefined(ctx.clone())),
         };
         result
     }
@@ -162,9 +159,7 @@ impl JSJavaProxy {
 
 #[cfg(test)]
 mod tests {
-    use rquickjs::{function, Context, Runtime};
-
-    use crate::quickjs_function::call_function;
+    use rquickjs::{Context, Function, Runtime};
 
     use super::*;
 
@@ -389,7 +384,7 @@ mod tests {
 
         // Try to restorce peristent function from result
         match result {
-            JSJavaProxy::Function(name, ptr) => {
+            JSJavaProxy::Function(_name, ptr) => {
                 let persistent_function =
                     unsafe { Box::from_raw(ptr as *mut Persistent<Function>) };
 
@@ -409,7 +404,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         let context = Context::full(&rt).unwrap();
 
-        let result: JSJavaProxy =
+        let _result: JSJavaProxy =
             context.with(|ctx| match ctx.eval("function a() { return 1; };a") {
                 Ok(value) => value,
                 Err(e) => panic!("Error evaluating script: {}", e),
@@ -430,7 +425,7 @@ mod tests {
         let rt = Runtime::new().unwrap();
         let context = Context::full(&rt).unwrap();
 
-        let result: JSJavaProxy =
+        let _result: JSJavaProxy =
             context.with(
                 |ctx| match ctx.eval("let r = function() { return 42; }; r") {
                     Ok(value) => value,

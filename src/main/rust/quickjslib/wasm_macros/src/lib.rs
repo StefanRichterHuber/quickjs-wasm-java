@@ -7,7 +7,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let input_fn = parse_macro_input!(item as ItemFn);
     let fn_name = &input_fn.sig.ident;
     let wrapper_name = format_ident!("{}_wasm", fn_name);
-    let vis = &input_fn.vis;
+    let _vis = &input_fn.vis;
 
     let mut wrapper_args = Vec::new();
     let mut conversions = Vec::new();

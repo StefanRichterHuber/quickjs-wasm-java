@@ -1,4 +1,3 @@
-use log::info;
 use rquickjs::Runtime;
 use wasm_macros::wasm_export;
 

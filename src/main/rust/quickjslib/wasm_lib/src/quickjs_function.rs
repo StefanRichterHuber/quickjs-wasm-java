@@ -1,4 +1,4 @@
-use rquickjs::{function::Args, Context, Function, IntoJs, Persistent, Value};
+use rquickjs::{Context, Function, Persistent};
 use wasm_macros::wasm_export;
 
 use crate::js_to_java_proxy::JSJavaProxy;
