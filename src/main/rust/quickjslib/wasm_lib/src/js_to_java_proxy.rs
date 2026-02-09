@@ -6,6 +6,7 @@ use rquickjs::Atom;
 use rquickjs::FromAtom;
 use rquickjs::FromJs;
 use rquickjs::Function;
+use rquickjs::IntoJs;
 use rquickjs::Persistent;
 use rquickjs::Value;
 use serde::Deserialize;
@@ -35,6 +36,26 @@ impl<'js> FromJs<'js> for JSJavaProxy {
 impl<'js> FromAtom<'js> for JSJavaProxy {
     fn from_atom(atom: Atom<'js>) -> rquickjs::Result<Self> {
         Ok(JSJavaProxy::convert(atom.to_value()?))
+    }
+}
+
+impl<'js> IntoJs<'js> for JSJavaProxy {
+    fn into_js(self, ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<Value<'js>> {
+        let result = match self {
+            JSJavaProxy::Null => Ok(Value::new_null(ctx.clone())),
+            JSJavaProxy::Undefined => Ok(Value::new_undefined(ctx.clone())),
+            JSJavaProxy::Float(value) => Ok(Value::new_float(ctx.clone(), value)),
+            JSJavaProxy::Int(value) => Ok(Value::new_int(ctx.clone(), value)),
+            JSJavaProxy::Boolean(value) => Ok(Value::new_bool(ctx.clone(), value)),
+            JSJavaProxy::String(value) => Ok(Value::from_string(
+                rquickjs::String::from_str(ctx.clone(), value.as_str()).unwrap(),
+            )),
+            // TODO implement more complex object
+            JSJavaProxy::Array(values) => Ok(Value::new_undefined(ctx.clone())),
+            JSJavaProxy::Object(values) => Ok(Value::new_undefined(ctx.clone())),
+            JSJavaProxy::Function(name, ptr) => Ok(Value::new_undefined(ctx.clone())),
+        };
+        result
     }
 }
 

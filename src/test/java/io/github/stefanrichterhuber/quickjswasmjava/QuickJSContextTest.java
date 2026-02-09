@@ -119,4 +119,41 @@ public class QuickJSContextTest {
 
         }
     }
+
+    @Test
+    public void testSetGlobal() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+            {
+                context.setGlobal("a", 42);
+                Object result = context.eval("a");
+                assertEquals(42, result);
+            }
+            {
+                context.setGlobal("a", "hello");
+                Object result = context.eval("a");
+                assertEquals("hello", result);
+            }
+            {
+                context.setGlobal("a", true);
+                Object result = context.eval("a");
+                assertEquals(true, result);
+            }
+            {
+                context.setGlobal("a", 3.14);
+                Object result = context.eval("a");
+                assertEquals(3.14, result);
+            }
+            // {
+            // context.setGlobal("a", List.of(1, 2, 3));
+            // Object result = context.eval("a");
+            // assertEquals(List.of(1, 2, 3), result);
+            // }
+            // {
+            // context.setGlobal("a", Map.of("b", 42));
+            // Object result = context.eval("a");
+            // assertEquals(Map.of("b", 42), result);
+            // }
+        }
+    }
 }

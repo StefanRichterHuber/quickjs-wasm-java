@@ -84,8 +84,10 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                 } else {
                     conversions.push(quote! {
+                        println!("Converting argument: {}", stringify!(#arg_name));
                         let slice = unsafe { std::slice::from_raw_parts(#ptr_name, #len_name) };
                         let #arg_name: #arg_type = rmp_serde::from_slice(slice).expect("MsgPack decode failed");
+                        println!("Converted argument: {:?}", #arg_name);
                     });
                 }
                 call_args.push(quote!(#arg_name));
@@ -94,7 +96,12 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
     }
 
     let return_handling = match &input_fn.sig.output {
-        ReturnType::Default => quote! { 0u64 },
+        ReturnType::Default => quote! {
+            #[doc = "No return type"]
+            let _result = #fn_name(#(#call_args),*);
+            #(#cleanups)*
+            0
+        },
         ReturnType::Type(_, ty) => {
             let type_str = quote!(#ty).to_string();
             if ["i32", "u32", "i64", "u64"].contains(&type_str.as_str()) {

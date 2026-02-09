@@ -2,6 +2,7 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.nio.charset.StandardCharsets;
 
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
@@ -48,6 +49,16 @@ public class QuickJSRuntime implements AutoCloseable {
 
     Instance getInstance() {
         return this.instance;
+    }
+
+    MemoryLocation writeToMemory(byte[] data) {
+        long ptr = alloc(data.length);
+        getInstance().memory().write((int) ptr, data);
+        return new MemoryLocation(ptr, data.length, this);
+    }
+
+    MemoryLocation writeToMemory(String data) {
+        return writeToMemory(data.getBytes(StandardCharsets.UTF_8));
     }
 
     /**

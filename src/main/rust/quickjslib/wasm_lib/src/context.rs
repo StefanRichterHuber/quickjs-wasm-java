@@ -30,3 +30,11 @@ pub fn eval_script(context: &Context, script: String) -> JSJavaProxy {
     result
 }
 
+#[wasm_export]
+pub fn set_global(context: &Context, name: String, value: JSJavaProxy) {
+    println!("Setting global: {:?}", value);
+    context.with(|ctx| {
+        let global = ctx.globals();
+        global.set(name, value).unwrap();
+    });
+}
