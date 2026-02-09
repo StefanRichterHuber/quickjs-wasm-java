@@ -15,4 +15,5 @@ rquickjs = { version = "0.11.0", features = [
     #  "dump-objects",
     #  "dump-read-object",
     #  "dump-bytecode",
+    "parallel",
 ] }

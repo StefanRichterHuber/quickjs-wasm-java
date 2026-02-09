@@ -89,4 +89,34 @@ public class QuickJSContextTest {
             }
         }
     }
+
+    @Test
+    public void testReturnFunctionFromEval() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+            // Local function
+            {
+                Object result = context.eval("let r = function() { return 42; }; r");
+                assertInstanceOf(QuickJSFunction.class, result);
+                QuickJSFunction function = (QuickJSFunction) result;
+                assertEquals(42, function.call());
+                assertEquals(42, function.call());
+                assertEquals(42, function.call());
+                assertEquals(42, function.call());
+            }
+
+            // Global function
+            {
+                Object result = context.eval("function a() { return 1; };a");
+                assertInstanceOf(QuickJSFunction.class, result);
+                QuickJSFunction function = (QuickJSFunction) result;
+                assertEquals(1, function.call());
+                assertEquals(1, function.call());
+                assertEquals(1, function.call());
+                assertEquals(1, function.call());
+
+            }
+
+        }
+    }
 }

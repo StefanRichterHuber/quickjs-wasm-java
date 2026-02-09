@@ -61,6 +61,18 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 conversions.push(quote! {
                     let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Runtime) };
                 });
+            } else if type_str == "& Persistent < Function < 'static > >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(#arg_name));
+                let box_name = format_ident!("{}_box", arg_name);
+                conversions.push(quote! {
+                    let #box_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Function>) };
+                    let #arg_name = #box_name.as_ref();
+                });
+
+                cleanups.push(quote! {
+                     _ = Box::into_raw(#box_name);
+                });
             } else {
                 let ptr_name = format_ident!("{}_ptr", arg_name);
                 let len_name = format_ident!("{}_len", arg_name);

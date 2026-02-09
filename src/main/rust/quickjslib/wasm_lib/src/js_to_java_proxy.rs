@@ -1,8 +1,12 @@
 use std::collections::HashMap;
+use std::sync::LazyLock;
+use std::sync::Mutex;
 
 use rquickjs::Atom;
 use rquickjs::FromAtom;
 use rquickjs::FromJs;
+use rquickjs::Function;
+use rquickjs::Persistent;
 use rquickjs::Value;
 use serde::Deserialize;
 use serde::Serialize;
@@ -19,6 +23,7 @@ pub enum JSJavaProxy {
     Boolean(bool),
     Array(Vec<JSJavaProxy>),
     Object(HashMap<String, JSJavaProxy>),
+    Function(String, u64),
 }
 
 impl<'js> FromJs<'js> for JSJavaProxy {
@@ -39,6 +44,16 @@ impl JSJavaProxy {
             return JSJavaProxy::Null;
         } else if value.is_undefined() {
             return JSJavaProxy::Undefined;
+        } else if value.is_function() {
+            let function = value.as_function().unwrap();
+
+            let name: String = function.get("name").unwrap();
+
+            let persistent_function = Persistent::save(function.ctx(), function.clone());
+            let persistent_function_ptr = Box::into_raw(Box::new(persistent_function)) as u64;
+
+            println!("Exported function: {} -> {}", name, persistent_function_ptr);
+            return JSJavaProxy::Function(name, persistent_function_ptr);
         } else if value.is_string() {
             let string = value.as_string().unwrap();
             return JSJavaProxy::String(string.to_string().unwrap());
@@ -86,7 +101,9 @@ impl JSJavaProxy {
 
 #[cfg(test)]
 mod tests {
-    use rquickjs::{Context, Runtime};
+    use rquickjs::{function, Context, Runtime};
+
+    use crate::quickjs_function::call_function;
 
     use super::*;
 
@@ -297,4 +314,83 @@ mod tests {
             _ => panic!("Expected an object"),
         }
     }
+
+    #[test]
+    fn test_js_java_proxy_function() {
+        let rt = Runtime::new().unwrap();
+        let context = Context::full(&rt).unwrap();
+
+        let result: JSJavaProxy =
+            context.with(|ctx| match ctx.eval("function a() { return 1; };a") {
+                Ok(value) => value,
+                Err(e) => panic!("Error evaluating script: {}", e),
+            });
+
+        // Try to restorce peristent function from result
+        match result {
+            JSJavaProxy::Function(name, ptr) => {
+                let persistent_function =
+                    unsafe { Box::from_raw(ptr as *mut Persistent<Function>) };
+
+                let result = context.with(|ctx| {
+                    let function = persistent_function.clone().restore(&ctx).unwrap();
+                    let result: JSJavaProxy = function.call(()).unwrap();
+                    result
+                });
+                assert_eq!(result, JSJavaProxy::Int(1));
+            }
+            _ => panic!("Expected a function"),
+        }
+    }
+
+    #[test]
+    fn test_js_java_proxy_function_with_call() {
+        let rt = Runtime::new().unwrap();
+        let context = Context::full(&rt).unwrap();
+
+        let result: JSJavaProxy =
+            context.with(|ctx| match ctx.eval("function a() { return 1; };a") {
+                Ok(value) => value,
+                Err(e) => panic!("Error evaluating script: {}", e),
+            });
+
+        // Try to restorce peristent function from result
+        // match result {
+        //     JSJavaProxy::Function(name, ptr) => {
+        //         let result = call_function(&context, ptr);
+        //         assert_eq!(result, JSJavaProxy::Int(1));
+        //     }
+        //     _ => panic!("Expected a function"),
+        // }
+    }
+
+    #[test]
+    fn test_js_java_proxy_local_function() {
+        let rt = Runtime::new().unwrap();
+        let context = Context::full(&rt).unwrap();
+
+        let result: JSJavaProxy =
+            context.with(
+                |ctx| match ctx.eval("let r = function() { return 42; }; r") {
+                    Ok(value) => value,
+                    Err(e) => panic!("Error evaluating script: {}", e),
+                },
+            );
+    }
+
+    // Try to restorce peristent function from result
+    // match result {
+    //     JSJavaProxy::Function(name, ptr) => {
+    //         let persistent_function =
+    //             unsafe { Box::from_raw(ptr as *mut Persistent<Function>) };
+
+    //         let result = context.with(|ctx| {
+    //             let function = persistent_function.clone().restore(&ctx).unwrap();
+    //             let result: JSJavaProxy = function.call(()).unwrap();
+    //             result
+    //         });
+    //         assert_eq!(result, JSJavaProxy::Int(42));
+    //     }
+    //     _ => panic!("Expected a function"),
+    // }
 }

@@ -4,6 +4,7 @@ use std::slice;
 use wasm_macros::wasm_export;
 mod context;
 mod js_to_java_proxy;
+mod quickjs_function;
 mod runtime;
 
 /// Give the host a way to free memory to prevent leaks
