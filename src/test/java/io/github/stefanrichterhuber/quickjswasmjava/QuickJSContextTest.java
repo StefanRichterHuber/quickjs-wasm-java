@@ -116,6 +116,15 @@ public class QuickJSContextTest {
                 assertEquals(1, function.call());
 
             }
+            // Function with arguments
+            {
+                Object result = context.eval("function a(b) { return b + 1; };a");
+                assertInstanceOf(QuickJSFunction.class, result);
+                QuickJSFunction function = (QuickJSFunction) result;
+                assertEquals(42, function.call(41));
+                assertEquals(1, function.call(0));
+                assertEquals(2, function.call(1));
+            }
 
         }
     }
@@ -144,16 +153,16 @@ public class QuickJSContextTest {
                 Object result = context.eval("a");
                 assertEquals(3.14, result);
             }
-            // {
-            // context.setGlobal("a", List.of(1, 2, 3));
-            // Object result = context.eval("a");
-            // assertEquals(List.of(1, 2, 3), result);
-            // }
-            // {
-            // context.setGlobal("a", Map.of("b", 42));
-            // Object result = context.eval("a");
-            // assertEquals(Map.of("b", 42), result);
-            // }
+            {
+                context.setGlobal("a", List.of(1, 2, 3));
+                Object result = context.eval("a[0]");
+                assertEquals(1, result);
+            }
+            {
+                context.setGlobal("a", Map.of("b", 42));
+                Object result = context.eval("a.b");
+                assertEquals(42, result);
+            }
         }
     }
 }

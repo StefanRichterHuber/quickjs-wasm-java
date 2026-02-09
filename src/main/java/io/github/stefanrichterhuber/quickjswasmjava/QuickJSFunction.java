@@ -1,6 +1,7 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.io.IOException;
+import java.util.List;
 
 import org.msgpack.core.MessageUnpacker;
 
@@ -20,15 +21,19 @@ public final class QuickJSFunction {
     }
 
     public Object call(Object... args) throws IOException {
+        // We create a message pack object from the arguments, with the root of the pack
+        // being an array
+        final List<Object> params = args == null || args.length == 0 ? List.of() : List.of(args);
 
-        long[] result = call.apply(context.getContextPointer(), functionPtr);
-        // Read the result with messagepack java, it is a pointer and a length to a
-        // message pack object
-
-        MessageUnpacker unpacker = context.getRuntime().unpackBytesFromMemory(result);
-        Object r = context.from(unpacker);
-        return r;
-
+        try (MemoryLocation memoryLocation = context.writeToMemory(params)) {
+            final long[] result = call.apply(context.getContextPointer(), functionPtr, memoryLocation.pointer(),
+                    memoryLocation.length());
+            // Read the result with messagepack java, it is a pointer and a length to a
+            // message pack object
+            MessageUnpacker unpacker = context.getRuntime().unpackBytesFromMemory(result);
+            final Object r = context.from(unpacker);
+            return r;
+        }
     }
 
     public String getName() {

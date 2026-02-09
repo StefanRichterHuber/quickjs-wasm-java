@@ -2,6 +2,8 @@ use std::collections::HashMap;
 use std::sync::LazyLock;
 use std::sync::Mutex;
 
+use rquickjs::function::Args;
+use rquickjs::prelude::IntoArgs;
 use rquickjs::Atom;
 use rquickjs::FromAtom;
 use rquickjs::FromJs;
@@ -50,12 +52,50 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
             JSJavaProxy::String(value) => Ok(Value::from_string(
                 rquickjs::String::from_str(ctx.clone(), value.as_str()).unwrap(),
             )),
-            // TODO implement more complex object
-            JSJavaProxy::Array(values) => Ok(Value::new_undefined(ctx.clone())),
-            JSJavaProxy::Object(values) => Ok(Value::new_undefined(ctx.clone())),
+            JSJavaProxy::Array(values) => {
+                let array = rquickjs::Array::new(ctx.clone()).unwrap();
+                for (i, value) in values.into_iter().enumerate() {
+                    array.set(i, value).unwrap();
+                }
+                Ok(array.into_value())
+            }
+            JSJavaProxy::Object(values) => {
+                let obj = rquickjs::Object::new(ctx.clone()).unwrap();
+                for (key, value) in values.into_iter() {
+                    obj.set(key, value).unwrap();
+                }
+                Ok(obj.into_value())
+            }
+            // TODO implement function
             JSJavaProxy::Function(name, ptr) => Ok(Value::new_undefined(ctx.clone())),
         };
         result
+    }
+}
+
+impl<'js> IntoArgs<'js> for JSJavaProxy {
+    fn num_args(&self) -> usize {
+        match self {
+            JSJavaProxy::Array(values) => values.len(),
+            JSJavaProxy::Undefined => 0,
+            _ => 1,
+        }
+    }
+
+    fn into_args(self, args: &mut Args<'js>) -> rquickjs::Result<()> {
+        match self {
+            JSJavaProxy::Array(values) => {
+                for value in values {
+                    args.push_arg(value).unwrap();
+                }
+                Ok(())
+            }
+            JSJavaProxy::Undefined => Ok(()),
+            _ => {
+                args.push_arg(self).unwrap();
+                Ok(())
+            }
+        }
     }
 }
 
