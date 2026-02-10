@@ -8,13 +8,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
-import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
 public class QuickJSContextTest {
 
-    @SuppressWarnings("unchecked")
     @Test
     public void testReturnValuesFromEval() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -225,7 +223,8 @@ public class QuickJSContextTest {
 
     @Test
     public void testScriptRuntimeLimit() throws Exception {
-        try (QuickJSRuntime runtime = new QuickJSRuntime().withScriptRuntimeLimit(1, TimeUnit.SECONDS);
+        try (@SuppressWarnings("resource")
+        QuickJSRuntime runtime = new QuickJSRuntime().withScriptRuntimeLimit(1, TimeUnit.SECONDS);
                 QuickJSContext context = runtime.createContext()) {
 
             try {
@@ -270,7 +269,8 @@ public class QuickJSContextTest {
             };
 
             context.setGlobal("add", add);
-            Object result = context.eval("add(1, 2)");
+            // This calls the java function add which throws an exception
+            context.eval("add(1, 2)");
 
             fail("Exception should have been thrown");
         } catch (Exception e) {

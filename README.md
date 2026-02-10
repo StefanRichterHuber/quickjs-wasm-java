@@ -26,7 +26,7 @@ You need Java 21 and Rust with `cargo` with the target `wasm32-wasip1` (`rustup 
 
 ## How to use
 
-Import library
+Import library (the library is *not yet* available in maven central, so you need to build it first)
 
 ```xml
 <dependency>
@@ -87,7 +87,7 @@ This library uses log4j2 for logging on the java side and the `log` crate on the
 
 1. A java library with dependencies to log4j2 and chicory. MessagePack is used to serialize data between Java and Rust.
 2. A wasm library build with Rust which uses rquickjs to interface QuickJS. It uses wasip1 to interface with the JVM. A central struct `JSJavaProxy` is used to convert between Java and JS types and vice versa. It represents all types that can be passed between Java and JS and is used to transfer data between the two runtimes, by serializing them to MessagePack.
-3 `QuickJS` runtime
+3. The `QuickJS` runtime provided by the `rquickjs` crate.
 
 ## License
 
