@@ -67,5 +67,9 @@ This library uses log4j2 for logging on the java side and the `log` crate on the
 ## Architecture
 
 1. A java library with dependencies to log4j2 and chicory. MessagePack is used to serialize data between Java and Rust.
-2. A wasm library build with Rust which uses rquickjs to interface QuickJS. It uses wasip1 to interface with the JVM. A central struct `JSJavaProxy` is used to convert between Java and JS types and vice versa. It represents all types that can be passed between Java and JS.
+2. A wasm library build with Rust which uses rquickjs to interface QuickJS. It uses wasip1 to interface with the JVM. A central struct `JSJavaProxy` is used to convert between Java and JS types and vice versa. It represents all types that can be passed between Java and JS and is used to transfer data between the two runtimes, by serializing them to MessagePack.
 3 `QuickJS` runtime
+
+## License
+
+Licensed under MIT License ([LICENSE](LICENSE) or <http://opensource.org/licenses/MIT>)
