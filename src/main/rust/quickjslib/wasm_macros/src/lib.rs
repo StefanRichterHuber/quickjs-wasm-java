@@ -84,10 +84,20 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     });
                 } else {
                     conversions.push(quote! {
-                        println!("Converting argument: {}", stringify!(#arg_name));
                         let slice = unsafe { std::slice::from_raw_parts(#ptr_name, #len_name) };
-                        let #arg_name: #arg_type = rmp_serde::from_slice(slice).expect("MsgPack decode failed");
-                        println!("Converted argument: {:?}", #arg_name);
+                        let #arg_name: #arg_type = match rmp_serde::from_slice(slice) {
+                            Ok(result) => result,
+                            Err(e) => {
+                                println!(
+                                    "MsgPack decode of argument {} (type {}) from java context failed: {}",
+                                    stringify!(#arg_name),
+                                    stringify!(#arg_type),
+                                    e
+                                );
+                                panic!("MsgPack decode of argument {} (type {}) from java context failed: {}", stringify!(#arg_name), stringify!(#arg_type), e);
+                            }
+                        };
+                        println!("Converted argument: {} -> {:?}", stringify!(#arg_name), #arg_name);
                     });
                 }
                 call_args.push(quote!(#arg_name));

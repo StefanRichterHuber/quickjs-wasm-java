@@ -7,6 +7,7 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.msgpack.core.MessageFormat;
 import org.msgpack.core.MessagePack;
@@ -15,6 +16,7 @@ import org.msgpack.core.MessageUnpacker;
 import org.msgpack.value.ValueType;
 
 import com.dylibso.chicory.runtime.ExportFunction;
+import com.dylibso.chicory.runtime.Instance;
 
 public class QuickJSContext implements AutoCloseable {
 
@@ -25,6 +27,8 @@ public class QuickJSContext implements AutoCloseable {
     private final ExportFunction setGlobal;
     private final ExportFunction closeContext;
 
+    private final List<Function<List<Object>, Object>> hostFunctions = new ArrayList<>();
+
     QuickJSContext(QuickJSRuntime runtime) {
         this.runtime = runtime;
         this.createContext = runtime.getInstance().export("create_context_wasm");
@@ -32,6 +36,41 @@ public class QuickJSContext implements AutoCloseable {
         this.eval = runtime.getInstance().export("eval_script_wasm");
         this.setGlobal = runtime.getInstance().export("set_global_wasm");
         this.contextPtr = createContext.apply(runtime.getRuntimePointer())[0];
+
+    }
+
+    long[] callHostFunction(Instance instance, long... args) {
+        final int functionPtr = (int) args[0];
+        final int argPtr = (int) args[1];
+        final int argLen = (int) args[2];
+
+        final Function<List<Object>, Object> function = hostFunctions.get(functionPtr);
+        if (function == null) {
+            throw new RuntimeException("Function not found: " + functionPtr);
+        }
+
+        final byte[] argsBytes = instance.memory().readBytes((int) argPtr, (int) argLen);
+        MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(argsBytes);
+        try {
+            Object realArgs = from(unpacker);
+
+            Object result = null;
+            if (realArgs instanceof List) {
+                List<Object> argsList = (List<Object>) realArgs;
+                result = function.apply(argsList);
+            } else {
+                List<Object> argsList = List.of(realArgs);
+                result = function.apply(argsList);
+            }
+
+            // Now we have to write the result back to the memory
+            try (MemoryLocation resultLocation = this.writeToMemory(result)) {
+                return new long[] { resultLocation.pack() };
+            }
+
+        } catch (IOException e) {
+            throw new RuntimeException("Error calling host function", e);
+        }
     }
 
     public Object eval(String script) throws IOException {
@@ -124,6 +163,15 @@ public class QuickJSContext implements AutoCloseable {
                     packer.packString((String) entry.getKey());
                     to(entry.getValue(), packer);
                 }
+            } else if (obj instanceof Function) {
+                // Here we must create the map first
+                packer.packMapHeader(1);
+                packer.packString("javaFunction");
+
+                packer.packArrayHeader(2);
+                packer.packInt((int) this.getContextPointer());
+                packer.packInt((int) hostFunctions.size());
+                hostFunctions.add((Function<List<Object>, Object>) obj);
             } else {
                 throw new RuntimeException("Unsupported type: " + obj.getClass().getName());
             }
@@ -137,6 +185,7 @@ public class QuickJSContext implements AutoCloseable {
         ValueType valueType = format.getValueType();
 
         if (valueType == ValueType.MAP) {
+            // Should always be 1
             final int mapSize = unpacker.unpackMapHeader();
             final String type = unpacker.unpackString();
             switch (type) {
@@ -172,6 +221,18 @@ public class QuickJSContext implements AutoCloseable {
                     String functionName = unpacker.unpackString();
                     long functionPtr = unpacker.unpackLong();
                     return new QuickJSFunction(this, functionName, functionPtr);
+                }
+                case "javaFunction": {
+                    int arraySize = unpacker.unpackArrayHeader();
+                    if (arraySize != 2) {
+                        throw new RuntimeException("Expected array with 2 element (context ptr, function index)");
+                    }
+                    final int contextPtr = unpacker.unpackInt();
+                    final int functionIndex = unpacker.unpackInt();
+                    if (contextPtr != this.getContextPointer()) {
+                        throw new RuntimeException("Context pointer does not match");
+                    }
+                    return hostFunctions.get(functionIndex);
                 }
                 default:
                     throw new RuntimeException("Unknown type: " + type);

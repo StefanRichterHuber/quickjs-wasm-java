@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 
 import java.util.List;
 import java.util.Map;
+import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
 
@@ -163,6 +164,21 @@ public class QuickJSContextTest {
                 Object result = context.eval("a.b");
                 assertEquals(42, result);
             }
+        }
+    }
+
+    @Test
+    public void exportJavaFunctionsToJS() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            Function<List<Object>, Object> add = args -> {
+                return (Integer) args.get(0) + (Integer) args.get(1);
+            };
+
+            context.setGlobal("add", add);
+            Object result = context.eval("add(1, 2)");
+            assertEquals(3, result);
         }
     }
 }

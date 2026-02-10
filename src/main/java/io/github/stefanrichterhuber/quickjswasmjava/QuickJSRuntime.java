@@ -3,23 +3,35 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 import java.io.IOException;
 import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 
 import com.dylibso.chicory.runtime.ExportFunction;
+import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.Instance;
 import com.dylibso.chicory.runtime.Store;
 import com.dylibso.chicory.wasi.WasiOptions;
 import com.dylibso.chicory.wasi.WasiPreview1;
 import com.dylibso.chicory.wasm.Parser;
+import com.dylibso.chicory.wasm.types.FunctionType;
+import com.dylibso.chicory.wasm.types.ValType;
 
 public class QuickJSRuntime implements AutoCloseable {
+    private static final Logger LOGGER = LogManager.getLogger();
+
     private final long ptr;
     private final Store store;
     private final Instance instance;
     private final ExportFunction alloc;
     private final ExportFunction dealloc;
+
+    private final Map<Long, QuickJSContext> contexts = new HashMap<>();
 
     public QuickJSRuntime() throws IOException {
         try (InputStream is = this.getClass()
@@ -27,7 +39,8 @@ public class QuickJSRuntime implements AutoCloseable {
 
             var options = WasiOptions.builder().withStdout(System.out).build();
             var wasi = WasiPreview1.builder().withOptions(options).build();
-            this.store = new Store().addFunction(wasi.toHostFunctions());
+            this.store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunction());
+
             // instantiate and execute the main entry point
             this.instance = this.store.instantiate("quickjslib", Parser.parse(is));
 
@@ -39,8 +52,48 @@ public class QuickJSRuntime implements AutoCloseable {
         }
     }
 
+    private HostFunction createCallHostFunction() {
+        HostFunction hostFunction = new HostFunction(
+                "env",
+                "call_java_function",
+                FunctionType.of(
+                        // First param is the context pointer, second is the function pointer, third is
+                        // the pointer to the message pack object, fourth is the length of the message
+                        // pack object
+                        List.of(ValType.I32, ValType.I32, ValType.I32, ValType.I32),
+                        // Return value is the pointer to the result message pack object and the length
+                        // packed into a i64
+                        List.of(ValType.I64)),
+                this::callHostFunction);
+        return hostFunction;
+    }
+
+    /**
+     * Calls the host function. This is a host function that is called from the
+     * QuickJS runtime. Delegate the call to the corresponding context.
+     * 
+     * @param instance
+     * @param args
+     * @return
+     */
+    private long[] callHostFunction(Instance instance, long... args) {
+        final long contextPtr = args[0];
+        final long functionPtr = args[1];
+        final long argsPtr = args[2];
+        final long argsLen = args[3];
+
+        final QuickJSContext context = contexts.get(contextPtr);
+        if (context == null) {
+            throw new RuntimeException("Context not found: " + contextPtr);
+        }
+        return context.callHostFunction(instance, functionPtr, argsPtr, argsLen);
+    }
+
     public QuickJSContext createContext() {
-        return new QuickJSContext(this);
+        QuickJSContext context = new QuickJSContext(this);
+        contexts.put(context.getContextPointer(), context);
+        LOGGER.info("Created context with pointer: {}", context.getContextPointer());
+        return context;
     }
 
     long getRuntimePointer() {

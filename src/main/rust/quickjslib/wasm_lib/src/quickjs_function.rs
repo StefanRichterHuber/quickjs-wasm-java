@@ -25,3 +25,13 @@ pub fn call_function<'js>(
 
     result
 }
+
+#[link(wasm_import_module = "env")]
+extern "C" {
+    pub fn call_java_function(
+        context: i32,
+        function: i32,
+        args_ptr: *const u8,
+        args_len: usize,
+    ) -> i64;
+}

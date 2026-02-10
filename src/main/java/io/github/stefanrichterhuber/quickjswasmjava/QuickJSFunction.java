@@ -2,12 +2,16 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.io.IOException;
 import java.util.List;
+import java.util.function.Function;
 
 import org.msgpack.core.MessageUnpacker;
 
 import com.dylibso.chicory.runtime.ExportFunction;
 
-public final class QuickJSFunction {
+/**
+ * Represents a js native function
+ */
+public final class QuickJSFunction implements Function<Object[], Object> {
     private final QuickJSContext context;
     private final String name;
     private final long functionPtr;
@@ -38,5 +42,14 @@ public final class QuickJSFunction {
 
     public String getName() {
         return name;
+    }
+
+    @Override
+    public Object apply(Object[] arg0) {
+        try {
+            return call(arg0);
+        } catch (IOException e) {
+            throw new RuntimeException(e);
+        }
     }
 }

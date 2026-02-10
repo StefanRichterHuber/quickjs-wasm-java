@@ -1,15 +1,19 @@
-use std::collections::HashMap;
-
 use rquickjs::function::Args;
+use rquickjs::function::IntoJsFunc;
+use rquickjs::function::ParamRequirement;
 use rquickjs::prelude::IntoArgs;
 use rquickjs::Atom;
 use rquickjs::FromAtom;
 use rquickjs::FromJs;
+use rquickjs::Function;
 use rquickjs::IntoJs;
 use rquickjs::Persistent;
 use rquickjs::Value;
 use serde::Deserialize;
 use serde::Serialize;
+use std::collections::HashMap;
+
+use crate::quickjs_function::call_java_function;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
@@ -24,6 +28,8 @@ pub enum JSJavaProxy {
     Array(Vec<JSJavaProxy>),
     Object(HashMap<String, JSJavaProxy>),
     Function(String, u64),
+    // context, function_ptr
+    JavaFunction(i32, i32),
 }
 
 impl<'js> FromJs<'js> for JSJavaProxy {
@@ -63,8 +69,22 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 }
                 Ok(obj.into_value())
             }
-            // TODO implement function
-            JSJavaProxy::Function(_name, _ptr) => Ok(Value::new_undefined(ctx.clone())),
+            JSJavaProxy::Function(_name, ptr) => {
+                let function = unsafe { Box::from_raw(ptr as *mut Persistent<Function>) };
+                let restored_function = function.clone().restore(ctx).unwrap();
+                _ = Box::into_raw(function);
+                Ok(restored_function.into_value())
+            }
+            JSJavaProxy::JavaFunction(ctx_ptr, function_ptr) => {
+                println!(
+                    "Imported Java function: {} at context {}",
+                    function_ptr, ctx_ptr
+                );
+                let f = JavaFunction::new(ctx_ptr, function_ptr);
+                let func = Function::new::<JSJavaProxy, JavaFunction>(ctx.clone(), f).unwrap();
+                let s = Value::from_function(func);
+                Ok(s)
+            }
         };
         result
     }
@@ -154,6 +174,81 @@ impl JSJavaProxy {
         }
 
         JSJavaProxy::Undefined
+    }
+}
+
+pub struct JavaFunction {
+    call: Box<dyn Fn(JSJavaProxy) -> JSJavaProxy>,
+}
+
+impl JavaFunction {
+    pub fn new(context: i32, func: i32) -> Self {
+        println!("Creating Java function: {} on context {}", func, context);
+        let call = move |arg: JSJavaProxy| {
+            println!(
+                "Calling Java function: {} on context {} with arg: {:?}",
+                func, context, arg
+            );
+
+            // Serialize args
+            let args = rmp_serde::to_vec(&arg).expect("MsgPack encode failed");
+            let args_len = args.len();
+            let args_ptr = args.as_ptr();
+
+            // Call Java function
+            let result = unsafe { call_java_function(context, func, args_ptr, args_len) };
+
+            // Deserialize result, result is a packed pointer and length
+            let result_ptr = result >> 32;
+            let result_len = result as usize;
+            let result_bytes =
+                unsafe { std::slice::from_raw_parts(result_ptr as *const u8, result_len) };
+            let result: JSJavaProxy = match rmp_serde::from_slice(result_bytes) {
+                Ok(result) => result,
+                Err(e) => {
+                    println!(
+                        "MsgPack decode of return value (type JSJavaProxy) from java context failed: {}",
+                        e
+                    );
+                    JSJavaProxy::Undefined
+                }
+            };
+
+            println!(
+                "Calling Java function: {} on context {} with arg: {:?} -> {:?}",
+                func, context, arg, result
+            );
+
+            result
+        };
+        Self {
+            call: Box::new(call),
+        }
+    }
+}
+
+impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
+    fn param_requirements() -> rquickjs::function::ParamRequirement {
+        // We cannot give any hint on the number of expected parameters
+        ParamRequirement::any()
+    }
+
+    fn call<'a>(
+        &self,
+        params: rquickjs::function::Params<'a, 'js>,
+    ) -> rquickjs::Result<Value<'js>> {
+        let mut args: Vec<JSJavaProxy> = Vec::new();
+        for i in 0..params.len() {
+            let value = params.arg(i);
+            if let Some(v) = value {
+                args.push(JSJavaProxy::convert(v));
+            }
+        }
+
+        let arg = JSJavaProxy::Array(args);
+        let result = (self.call)(arg);
+
+        result.into_js(params.ctx())
     }
 }
 
