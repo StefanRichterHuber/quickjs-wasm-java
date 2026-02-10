@@ -77,6 +77,11 @@
             <version>${chicory.version}</version>
         </dependency>
         <dependency>
+            <groupId>com.dylibso.chicory</groupId>
+            <artifactId>compiler</artifactId>
+            <version>${chicory.version}</version>
+        </dependency>
+        <dependency>
             <groupId>org.msgpack</groupId>
             <artifactId>msgpack-core</artifactId>
             <version>0.9.11</version>

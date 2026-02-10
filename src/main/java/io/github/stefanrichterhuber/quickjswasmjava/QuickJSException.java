@@ -1,16 +1,38 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
+/**
+ * Exception thrown when a QuickJS script throws an exception.
+ */
 public class QuickJSException extends RuntimeException {
+    /**
+     * The stack trace of the exception.
+     */
     private final String stack;
+    /**
+     * The raw message of the exception.
+     */
     private final String message;
 
-    public QuickJSException(String message, String stack) {
+    /**
+     * Creates a new QuickJSException.
+     * 
+     * @param message The message of the exception.
+     * @param stack   The stack trace of the exception.
+     */
+    QuickJSException(String message, String stack) {
         super(message);
         this.stack = stack;
         this.message = message;
     }
 
-    public QuickJSException(String message, String stack, Throwable cause) {
+    /**
+     * Creates a new QuickJSException.
+     * 
+     * @param message The message of the exception.
+     * @param stack   The stack trace of the exception.
+     * @param cause   The cause of the exception.
+     */
+    QuickJSException(String message, String stack, Throwable cause) {
         super(message, cause);
         this.stack = stack;
         this.message = message;

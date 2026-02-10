@@ -14,6 +14,8 @@ import org.apache.logging.log4j.Logger;
 import org.msgpack.core.MessagePack;
 import org.msgpack.core.MessageUnpacker;
 
+import com.dylibso.chicory.compiler.InterpreterFallback;
+import com.dylibso.chicory.compiler.MachineFactoryCompiler;
 import com.dylibso.chicory.runtime.ExportFunction;
 import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.Instance;
@@ -21,6 +23,7 @@ import com.dylibso.chicory.runtime.Store;
 import com.dylibso.chicory.wasi.WasiOptions;
 import com.dylibso.chicory.wasi.WasiPreview1;
 import com.dylibso.chicory.wasm.Parser;
+import com.dylibso.chicory.wasm.WasmModule;
 import com.dylibso.chicory.wasm.types.FunctionType;
 import com.dylibso.chicory.wasm.types.ValType;
 
@@ -29,17 +32,43 @@ import com.dylibso.chicory.wasm.types.ValType;
  * wasm library.
  */
 public class QuickJSRuntime implements AutoCloseable {
+    public static final boolean DEFAULT_COMPILE = true;
+
+    /**
+     * Logger for the QuickJSRuntime class.
+     */
     private static final Logger LOGGER = LogManager.getLogger(QuickJSRuntime.class);
+    /**
+     * Logger for the native WasmLib class. All log calls from the native library
+     * are redirected to this logger.
+     */
     private static final Logger NATIVE_LOGGER = LogManager
             .getLogger("io.github.stefanrichterhuber.quickjswasmjava.native.WasmLib");
 
+    /**
+     * Pointer to the runtime in the wasm library.
+     */
     private long ptr;
-    private final Store store;
+    /**
+     * The wasm instance.
+     */
     private final Instance instance;
+    /**
+     * The native alloc function.
+     */
     private final ExportFunction alloc;
+    /**
+     * The native dealloc function.
+     */
     private final ExportFunction dealloc;
+    /**
+     * The native closeRuntime function.
+     */
     private final ExportFunction closeRuntime;
 
+    /**
+     * Map of contexts belonging to this runtime.
+     */
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
 
     /**
@@ -61,25 +90,83 @@ public class QuickJSRuntime implements AutoCloseable {
      * @throws IOException
      */
     public QuickJSRuntime() throws IOException {
+        this(DEFAULT_COMPILE);
+    }
+
+    /**
+     * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
+     * instantiates it.
+     * 
+     * @param compile Whether to compile the wasm library to native code. This
+     *                runtime compiler translates the WASM instructions to Java
+     *                bytecode on-the-fly in-memory. The resulting code is usually
+     *                expected to evaluate (much) faster and consume less memory
+     *                than if it was interpreted. You end up paying a small
+     *                performance penalty at Instance initialization, but the
+     *                execution speedup is usually worth it. If not set, default is
+     *                true. For very short lived runtimes with very small scripts,
+     *                it might be faster to set this to false.
+     * @throws IOException
+     * @see https://chicory.dev/docs/usage/runtime-compiler
+     */
+    public QuickJSRuntime(boolean compile) throws IOException {
         try (InputStream is = this.getClass()
                 .getResourceAsStream("libs/wasm_lib.wasm")) {
 
-            var options = WasiOptions.builder().withStdout(System.out).build();
-            var wasi = WasiPreview1.builder().withOptions(options).build();
-            this.store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunctions());
+            final WasiOptions options = WasiOptions.builder().withStdout(System.out).build();
+            final WasiPreview1 wasi = WasiPreview1.builder().withOptions(options).build();
+            final Store store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunctions());
 
-            // instantiate and execute the main entry point
-            this.instance = this.store.instantiate("quickjslib", Parser.parse(is));
+            final WasmModule module = Parser.parse(is);
+            if (compile) {
+                this.instance = createCompiledInstance(module, store);
+            } else {
+                this.instance = createInterpretedInstance(module, store);
+            }
 
-            this.alloc = instance.export("alloc");
-            this.dealloc = instance.export("dealloc");
-            this.closeRuntime = instance.export("close_runtime_wasm");
+            this.alloc = this.instance.export("alloc");
+            this.dealloc = this.instance.export("dealloc");
+            this.closeRuntime = this.instance.export("close_runtime_wasm");
 
             initLogging();
 
             long[] result = this.instance.export("create_runtime_wasm").apply();
             this.ptr = result[0];
         }
+    }
+
+    /**
+     * Creates an interpreted instance of the QuickJS wasm library.
+     * 
+     * @param module The wasm module to instantiate.
+     * @param store  The store to use for instantiation.
+     * @return The interpreted instance.
+     */
+    private static Instance createInterpretedInstance(WasmModule module, Store store) {
+        Instance instance = store.instantiate("quickjslib", module);
+        return instance;
+    }
+
+    /**
+     * Creates a compiled instance of the QuickJS wasm library.
+     * 
+     * @param module The wasm module to instantiate.
+     * @param store  The store to use for instantiation.
+     * @return The compiled instance.
+     */
+    private static Instance createCompiledInstance(WasmModule module, Store store) {
+        // Unfortunately one QuickJS func is to big to be compiled to native code, so we
+        // have to use the interpreter fallback
+        // Warning: using interpreted mode for WASM function index: 2587 (name:
+        // JS_CallInternal)
+        Instance instance = Instance.builder(module)
+                .withImportValues(store.toImportValues())
+                .withMachineFactory(MachineFactoryCompiler.builder(module)
+                        .withInterpreterFallback(InterpreterFallback.SILENT)
+                        .compile())
+                .build();
+
+        return instance;
     }
 
     /**
@@ -114,6 +201,12 @@ public class QuickJSRuntime implements AutoCloseable {
         this.instance.export("init_logger_wasm").apply(level);
     }
 
+    /**
+     * Creates the host functions that are used to call Java functions from the
+     * QuickJS wasm runtime.
+     * 
+     * @return The host functions.
+     */
     private HostFunction[] createCallHostFunctions() {
         HostFunction hostFunction = new HostFunction(
                 "env",
@@ -143,6 +236,7 @@ public class QuickJSRuntime implements AutoCloseable {
                 "js_interrupt_handler",
                 FunctionType.of(
                         List.of(),
+                        // Return value is 1 if the execution should be interrupted, 0 otherwise
                         List.of(ValType.I32)),
                 this::interruptHandlerHostFunction);
 

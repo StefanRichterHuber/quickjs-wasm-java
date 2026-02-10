@@ -26,18 +26,60 @@ import org.msgpack.value.ValueType;
 import com.dylibso.chicory.runtime.ExportFunction;
 import com.dylibso.chicory.runtime.Instance;
 
+/**
+ * Java representation of a QuickJS context object. The context is the central
+ * interaction point with the JS runtime. Here you set / get global variables
+ * and execute scripts. Each context has its own memory space and can be used to
+ * evaluate scripts independently of other contexts. It is recommended to close
+ * the context when it is no longer needed to free up resources.
+ */
 public class QuickJSContext implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
 
+    /**
+     * Pointer to the QuickJS context object in the Wasm memory.
+     */
     private long contextPtr;
+
+    /**
+     * The runtime this context belongs to.
+     */
     private final QuickJSRuntime runtime;
+
+    /**
+     * The native eval function.
+     */
     private final ExportFunction eval;
+
+    /**
+     * The native createContext function.
+     */
     private final ExportFunction createContext;
+
+    /**
+     * The native setGlobal function.
+     */
     private final ExportFunction setGlobal;
+
+    /**
+     * The native closeContext function.
+     */
     private final ExportFunction closeContext;
+
+    /**
+     * The native getGlobal function.
+     */
     private final ExportFunction getGlobal;
 
+    /**
+     * List of resources that are dependent on this context. If this context is
+     * closed, all dependent resources will be closed too.
+     */
     private final List<AutoCloseable> dependendResources = new ArrayList<>();
+
+    /**
+     * List of host functions.
+     */
     private final List<Function<List<Object>, Object>> hostFunctions = new ArrayList<>();
 
     /**

@@ -24,7 +24,7 @@ record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) implemen
      * @param runtime The runtime.
      * @return The unpacked memory location.
      */
-    public static MemoryLocation unpack(long packed, QuickJSRuntime runtime) {
+    static MemoryLocation unpack(long packed, QuickJSRuntime runtime) {
         final int resultLen = (int) (packed & 0xffffffff);
         final int resultPtr = (int) ((packed >> 32) & 0xffffffff);
         return new MemoryLocation(resultPtr, resultLen, runtime);
@@ -36,7 +36,7 @@ record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) implemen
      * 
      * @return The packed memory location.
      */
-    public long pack() {
+    long pack() {
         final int resultPtr = (int) (pointer & 0xffffffff);
         final int resultLen = (int) (length & 0xffffffff);
         return (long) resultLen | ((long) resultPtr << 32);

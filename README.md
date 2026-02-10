@@ -12,8 +12,8 @@ There are several (more) mature JavaScript runtimes for Java like
 All of these deeply integrate with the Java runtime and allow full access of JS scripts into the Java runtime. For some applications this might be a security or stability issue. This runtime, on the other hand, only has a very lean interface between Java and Javascript. Scripts can only access the objects explicitly passed into the runtime and have no other access to the outside world. Furthermore hard limits on time and memory consumption of the scripts can be easily set, to limit the impact of malicious or faulty scripts on your applications. This is especially great to implement some calculation or validation scripts, so very small scripts with a small, very well defined scope. Due to the safe nature of this runtime, you can pass writing this scripts to trusted users without compromising the integrity of the rest of your application.
 A main goal of this implementation is to provide a very clean, yet efficient and type-safe interface.
 
-There is already another take on this topic [quickjs-java](https://github.com/StefanRichterHuber/quickjs-java), which is also a Java Library wrapping QuickJS. It is, however, using a custom rust based JNI library to interface with QuickJS. This means a custom native library has to be build for each platform. This approach avoids this by using wasm and chicory - zero native dependencies at runtime. On the other hand, this requires a wasm library to be build, which adds some build complexity (requires Rust with cargo).
-
+There is already another take from me on this topic [quickjs-java](https://github.com/StefanRichterHuber/quickjs-java), which is also a Java Library wrapping QuickJS. It is, however, using a custom rust based JNI library to interface with QuickJS. This means a custom native library has to be build for each platform. 
+This approach avoids native libraries by using wasm and [Chicory](https://chicory.dev/) (a wasm runtime for Java without native dependencies). This means zero native dependencies at runtime. On the other hand, this requires a wasm library to be build, which is one one hand less complex than building a native library for each plaform, but still requires Rust and Cargo to be installed for building the wasm library.
 
 There are, however, other projects binding QuickJS to the JVM, which might be worth looking at:
 
@@ -35,6 +35,25 @@ Import library
     <version>[current version]</version>
 </dependency>
 ```
+
+Use it
+
+```java
+try (QuickJSRuntime runtime = new QuickJSRuntime();
+        QuickJSContext context = runtime.createContext()) {
+
+    BiFunction<Integer, Integer, Integer> add = (a, b) -> {
+        return a + b;
+    };
+
+    context.setGlobal("add", add);
+    Object result = context.eval("add(1, 2)");
+    assertEquals(3, result);
+}
+```
+
+See test `QuickJSContextTest` for more examples of all capabilities of this script runtime.
+
 
 ### Supported types
 

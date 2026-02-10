@@ -7,12 +7,24 @@ import java.util.function.Function;
 import com.dylibso.chicory.runtime.ExportFunction;
 
 /**
- * Represents a js native function
+ * Represents a quickjs native function
  */
 public final class QuickJSFunction implements Function<Object[], Object> {
+    /**
+     * The context this function belongs to.
+     */
     private final QuickJSContext context;
+    /**
+     * The name of the function.
+     */
     private final String name;
+    /**
+     * The pointer to the function in the wasm library.
+     */
     private final long functionPtr;
+    /**
+     * The native call function.
+     */
     private final ExportFunction call;
 
     /**

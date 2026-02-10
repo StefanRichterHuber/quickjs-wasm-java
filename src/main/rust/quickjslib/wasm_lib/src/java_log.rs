@@ -5,6 +5,18 @@ struct JavaLog {
     level: Level,
 }
 /// Implementation of the Log trait for JavaLog. Delegate log messages to Java.
+///
+/// # Arguments
+///
+/// * `level` - The log level to set
+///
+/// # Levels
+///
+/// * `1` - Error
+/// * `2` - Warn
+/// * `3` - Info
+/// * `4` - Debug
+/// * `5` - Trace
 impl log::Log for JavaLog {
     fn enabled(&self, metadata: &log::Metadata) -> bool {
         metadata.level() <= self.level
@@ -31,6 +43,13 @@ impl log::Log for JavaLog {
     }
 }
 
+/// Imports the log_java function from the Java side.
+///
+/// # Arguments
+///
+/// * `level` - The log level to set
+/// * `message` - The message to log
+/// * `message_len` - The length of the message
 #[link(wasm_import_module = "env")]
 extern "C" {
     pub fn log_java(level: i32, message: *const u8, message_len: usize);
