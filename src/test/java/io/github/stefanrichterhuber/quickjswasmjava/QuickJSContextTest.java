@@ -2,9 +2,11 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
@@ -180,6 +182,20 @@ public class QuickJSContextTest {
             context.setGlobal("add", add);
             Object result = context.eval("add(1, 2)");
             assertEquals(3, result);
+        }
+    }
+
+    @Test
+    public void testScriptRuntimeLimit() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime().withScriptRuntimeLimit(1, TimeUnit.SECONDS);
+                QuickJSContext context = runtime.createContext()) {
+
+            try {
+                context.eval("while(true){}");
+                fail("Script runtime limit should have been reached");
+            } catch (Exception e) {
+                // Expected exception
+            }
         }
     }
 }

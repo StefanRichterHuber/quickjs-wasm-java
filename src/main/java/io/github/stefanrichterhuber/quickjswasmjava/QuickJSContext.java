@@ -105,6 +105,7 @@ public class QuickJSContext implements AutoCloseable {
         runtime.getInstance().memory().writeString((int) ptr, script, StandardCharsets.UTF_8);
         LOGGER.debug("Allocated memory for script: {} with length {}", ptr, scriptBytesLen);
         try {
+            runtime.scriptStarted();
             long[] result = eval.apply(contextPtr, ptr, scriptBytesLen);
             // Read the result with messagepack java, it is a pointer and a length to a
             // message pack object
@@ -116,6 +117,7 @@ public class QuickJSContext implements AutoCloseable {
             }
         } finally {
             runtime.dealloc(ptr, scriptBytesLen);
+            runtime.scriptFinished();
         }
     }
 

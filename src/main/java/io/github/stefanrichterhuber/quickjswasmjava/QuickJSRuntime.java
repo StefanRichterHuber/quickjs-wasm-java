@@ -6,6 +6,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
@@ -39,6 +40,18 @@ public class QuickJSRuntime implements AutoCloseable {
     private final ExportFunction dealloc;
 
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
+
+    /**
+     * Number of milliseconds a script is allowed to run. Defaults to infinite
+     * runtime (scriptRuntimeLimit = -1)
+     */
+    private long scriptRuntimeLimit = -1;
+
+    /**
+     * Time in milliseconds when the script was started. This is used to ensure the
+     * script meets its runtime limits
+     */
+    private long scriptStartTime = -1;
 
     /**
      * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
@@ -123,7 +136,72 @@ public class QuickJSRuntime implements AutoCloseable {
                         List.of()),
                 this::logHostFunction);
 
-        return new HostFunction[] { hostFunction, logHostFunction };
+        HostFunction interruptHandlerHostFunction = new HostFunction(
+                "env",
+                "js_interrupt_handler",
+                FunctionType.of(
+                        List.of(),
+                        List.of(ValType.I32)),
+                this::interruptHandlerHostFunction);
+
+        return new HostFunction[] { hostFunction, logHostFunction, interruptHandlerHostFunction };
+    }
+
+    /**
+     * This callback is called regularly from the QuickJS runtime to check if there
+     * is an interrupt. If it returns 1 (true), the execution is interrupted. This
+     * is currently used to set a max execution time for a script
+     * 
+     * @param instance
+     * @param args
+     * @return
+     */
+    private long[] interruptHandlerHostFunction(Instance instance, long... args) {
+        if (this.scriptStartTime > 0 && scriptRuntimeLimit > 0) {
+            final boolean result = !(System.currentTimeMillis() - scriptStartTime < scriptRuntimeLimit);
+            if (result) {
+                LOGGER.warn("Script runtime limit of {} ms exceeded, interrupting script", scriptRuntimeLimit);
+            }
+            return result ? new long[] { 1 } : new long[] { 0 };
+        }
+        return new long[] { 0 };
+    }
+
+    /**
+     * Callback called by QuickJSContext when a script is started
+     */
+    void scriptStarted() {
+        scriptStartTime = System.currentTimeMillis();
+        LOGGER.debug("Script started at time {}", scriptStartTime);
+    }
+
+    /**
+     * Callback called by QuickJSContext when a script is finished
+     */
+    void scriptFinished() {
+        LOGGER.debug("Script finished at time {}. Total runtime {} ms", () -> System.currentTimeMillis(),
+                () -> System.currentTimeMillis() - scriptStartTime);
+        this.scriptStartTime = -1;
+    }
+
+    /**
+     * Sets the time a script is allowed to run. Negative values allow for infinite
+     * runtime
+     * 
+     * @param limit Limit to set
+     * @param unit  Time Unit of the limit
+     * @return this QuickJSRuntime instance for method chaining.
+     */
+    public QuickJSRuntime withScriptRuntimeLimit(long limit, TimeUnit unit) {
+        if (limit < 0) {
+            scriptRuntimeLimit = 0;
+        } else {
+            if (unit == null) {
+                throw new IllegalArgumentException("Time unit cannot be null");
+            }
+            scriptRuntimeLimit = unit.toMillis(limit);
+        }
+        return this;
     }
 
     /**
