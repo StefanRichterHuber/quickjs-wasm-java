@@ -5,13 +5,13 @@ public class QuickJSException extends RuntimeException {
     private final String message;
 
     public QuickJSException(String message, String stack) {
-        super(message + "\nStack: " + stack);
+        super(message);
         this.stack = stack;
         this.message = message;
     }
 
     public QuickJSException(String message, String stack, Throwable cause) {
-        super(message + "\nStack: " + stack, cause);
+        super(message, cause);
         this.stack = stack;
         this.message = message;
     }

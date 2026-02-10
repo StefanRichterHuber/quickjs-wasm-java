@@ -21,6 +21,20 @@ pub fn close_context(context: Box<Context>) {
     drop(context);
 }
 
+/// Handles errors that occur during QuickJS operations.
+///
+/// This function converts `rquickjs::Error` into `JSJavaProxy::Exception`.
+/// If the error is an `Exception`, it attempts to extract the message and stack trace.
+/// Otherwise, it falls back to the standard error string representation.
+///
+/// # Arguments
+///
+/// * `err` - The error to handle.
+/// * `ctx` - The QuickJS context, used to catch and inspect exceptions.
+///
+/// # Returns
+///
+/// A `JSJavaProxy::Exception` containing the error message and stack trace.
 pub fn handle_error(err: Error, ctx: Ctx<'_>) -> JSJavaProxy {
     match err {
         rquickjs::Error::Exception => {

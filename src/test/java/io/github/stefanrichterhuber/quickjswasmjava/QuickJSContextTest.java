@@ -236,4 +236,27 @@ public class QuickJSContextTest {
             }
         }
     }
+
+    @Test
+    public void testExceptionHandling() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+            try {
+                context.eval("""
+                        let a = 1;
+                        let b = 0;
+                        let c = a / b;
+                        throw new Error('test');
+                        """);
+                fail("Exception should have been thrown");
+            } catch (Exception e) {
+                assertInstanceOf(QuickJSException.class, e);
+                QuickJSException quickJSException = (QuickJSException) e;
+                assertEquals("test", quickJSException.getRawMessage());
+                assertEquals("    at <eval> (eval_script:4:11)\n",
+                        quickJSException.getStack());
+                System.out.println(e.getMessage());
+            }
+        }
+    }
 }
