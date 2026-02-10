@@ -88,7 +88,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         let #arg_name: #arg_type = match rmp_serde::from_slice(slice) {
                             Ok(result) => result,
                             Err(e) => {
-                                println!(
+                                log::error!(
                                     "MsgPack decode of argument {} (type {}) from java context failed: {}",
                                     stringify!(#arg_name),
                                     stringify!(#arg_type),
@@ -97,7 +97,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                                 panic!("MsgPack decode of argument {} (type {}) from java context failed: {}", stringify!(#arg_name), stringify!(#arg_type), e);
                             }
                         };
-                        println!("Converted argument: {} -> {:?}", stringify!(#arg_name), #arg_name);
+                        log::debug!("Converted argument {} -> {:?}", stringify!(#arg_name), #arg_name);
                     });
                 }
                 call_args.push(quote!(#arg_name));
@@ -150,6 +150,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 quote! {
                     #[doc = concat!("target type: ", stringify!(#ty))]
                     let result = #fn_name(#(#call_args),*);
+                    log::debug!("Converted return value: {:?}", result);
                     let bytes = rmp_serde::to_vec(&result).expect("MsgPack encode failed");
                     let len = bytes.len();
                     let ptr = bytes.as_ptr();

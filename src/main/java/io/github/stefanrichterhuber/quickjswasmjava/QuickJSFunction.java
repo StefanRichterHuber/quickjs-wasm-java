@@ -4,8 +4,6 @@ import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
 
-import org.msgpack.core.MessageUnpacker;
-
 import com.dylibso.chicory.runtime.ExportFunction;
 
 /**
@@ -29,15 +27,18 @@ public final class QuickJSFunction implements Function<Object[], Object> {
         // being an array
         final List<Object> params = args == null || args.length == 0 ? List.of() : List.of(args);
 
-        try (MemoryLocation memoryLocation = context.writeToMemory(params)) {
-            final long[] result = call.apply(context.getContextPointer(), functionPtr, memoryLocation.pointer(),
-                    memoryLocation.length());
-            // Read the result with messagepack java, it is a pointer and a length to a
-            // message pack object
-            MessageUnpacker unpacker = context.getRuntime().unpackBytesFromMemory(result);
-            final Object r = context.from(unpacker);
+        // Don't close the memory location here, because it will be used by the wasm
+        // function
+        final MemoryLocation memoryLocation = context.writeToMemory(params);
+        final long[] result = call.apply(context.getContextPointer(), functionPtr, memoryLocation.pointer(),
+                memoryLocation.length());
+
+        // Cleanup the memory location after reading the result
+        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], context.getRuntime())) {
+            final Object r = context.unpackObjectFromMemory(resultLocation);
             return r;
         }
+
     }
 
     public String getName() {

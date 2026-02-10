@@ -1,3 +1,5 @@
+use log::debug;
+use log::error;
 use rquickjs::function::Args;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::function::ParamRequirement;
@@ -76,7 +78,7 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 Ok(restored_function.into_value())
             }
             JSJavaProxy::JavaFunction(ctx_ptr, function_ptr) => {
-                println!(
+                debug!(
                     "Imported Java function: {} at context {}",
                     function_ptr, ctx_ptr
                 );
@@ -130,7 +132,7 @@ impl JSJavaProxy {
             let persistent_function = Persistent::save(function.ctx(), function.clone());
             let persistent_function_ptr = Box::into_raw(Box::new(persistent_function)) as u64;
 
-            println!("Exported function: {} -> {}", name, persistent_function_ptr);
+            debug!("Exported function: {} -> {}", name, persistent_function_ptr);
             return JSJavaProxy::Function(name, persistent_function_ptr);
         } else if value.is_string() {
             let string = value.as_string().unwrap();
@@ -183,9 +185,9 @@ pub struct JavaFunction {
 
 impl JavaFunction {
     pub fn new(context: i32, func: i32) -> Self {
-        println!("Creating Java function: {} on context {}", func, context);
+        debug!("Creating Java function: {} on context {}", func, context);
         let call = move |arg: JSJavaProxy| {
-            println!(
+            debug!(
                 "Calling Java function: {} on context {} with arg: {:?}",
                 func, context, arg
             );
@@ -206,7 +208,7 @@ impl JavaFunction {
             let result: JSJavaProxy = match rmp_serde::from_slice(result_bytes) {
                 Ok(result) => result,
                 Err(e) => {
-                    println!(
+                    error!(
                         "MsgPack decode of return value (type JSJavaProxy) from java context failed: {}",
                         e
                     );
@@ -214,7 +216,7 @@ impl JavaFunction {
                 }
             };
 
-            println!(
+            debug!(
                 "Calling Java function: {} on context {} with arg: {:?} -> {:?}",
                 func, context, arg, result
             );

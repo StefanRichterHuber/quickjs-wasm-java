@@ -11,6 +11,7 @@ import org.junit.jupiter.api.Test;
 
 public class QuickJSContextTest {
 
+    @SuppressWarnings("unchecked")
     @Test
     public void testReturnValuesFromEval() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();

@@ -7,6 +7,7 @@ import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 
+import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.msgpack.core.MessagePack;
@@ -22,8 +23,14 @@ import com.dylibso.chicory.wasm.Parser;
 import com.dylibso.chicory.wasm.types.FunctionType;
 import com.dylibso.chicory.wasm.types.ValType;
 
+/**
+ * Represents a QuickJS runtime. This is the main entry point for the QuickJS
+ * wasm library.
+ */
 public class QuickJSRuntime implements AutoCloseable {
-    private static final Logger LOGGER = LogManager.getLogger();
+    private static final Logger LOGGER = LogManager.getLogger(QuickJSRuntime.class);
+    private static final Logger NATIVE_LOGGER = LogManager
+            .getLogger("io.github.stefanrichterhuber.quickjswasmjava.native.WasmLib");
 
     private final long ptr;
     private final Store store;
@@ -33,13 +40,19 @@ public class QuickJSRuntime implements AutoCloseable {
 
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
 
+    /**
+     * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
+     * instantiates it.
+     * 
+     * @throws IOException
+     */
     public QuickJSRuntime() throws IOException {
         try (InputStream is = this.getClass()
                 .getResourceAsStream("libs/wasm_lib.wasm")) {
 
             var options = WasiOptions.builder().withStdout(System.out).build();
             var wasi = WasiPreview1.builder().withOptions(options).build();
-            this.store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunction());
+            this.store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunctions());
 
             // instantiate and execute the main entry point
             this.instance = this.store.instantiate("quickjslib", Parser.parse(is));
@@ -47,12 +60,46 @@ public class QuickJSRuntime implements AutoCloseable {
             this.alloc = instance.export("alloc");
             this.dealloc = instance.export("dealloc");
 
+            initLogging();
+
             long[] result = this.instance.export("create_runtime_wasm").apply();
             this.ptr = result[0];
         }
     }
 
-    private HostFunction createCallHostFunction() {
+    /**
+     * Initializes the logging for the QuickJS wasm runtime, depending on the log
+     * level of the native logger.
+     */
+    private void initLogging() {
+        if (NATIVE_LOGGER.getLevel() == Level.ERROR || LOGGER.getLevel() == Level.FATAL) {
+            initLogging(1);
+        } else if (NATIVE_LOGGER.getLevel() == Level.WARN) {
+            initLogging(2);
+        } else if (NATIVE_LOGGER.getLevel() == Level.INFO) {
+            initLogging(3);
+        } else if (NATIVE_LOGGER.getLevel() == Level.DEBUG) {
+            initLogging(4);
+        } else if (NATIVE_LOGGER.getLevel() == Level.TRACE) {
+            initLogging(5);
+        } else if (NATIVE_LOGGER.getLevel() == Level.OFF) {
+            initLogging(0);
+        } else {
+            LOGGER.warn("Unknown log level " + NATIVE_LOGGER.getLevel() + " , using INFO for native library");
+            initLogging(3);
+        }
+    }
+
+    /**
+     * Initializes the logging for the QuickJS wasm runtime with the given level.
+     * 
+     * @param level The log level to use for the QuickJS wasm runtime.
+     */
+    private void initLogging(int level) {
+        this.instance.export("init_logger_wasm").apply(level);
+    }
+
+    private HostFunction[] createCallHostFunctions() {
         HostFunction hostFunction = new HostFunction(
                 "env",
                 "call_java_function",
@@ -65,7 +112,57 @@ public class QuickJSRuntime implements AutoCloseable {
                         // packed into a i64
                         List.of(ValType.I64)),
                 this::callHostFunction);
-        return hostFunction;
+
+        HostFunction logHostFunction = new HostFunction(
+                "env",
+                "log_java",
+                FunctionType.of(
+                        // First param is the level, second is the pointer to the message string, third
+                        // is the length of the message string
+                        List.of(ValType.I32, ValType.I32, ValType.I32),
+                        List.of()),
+                this::logHostFunction);
+
+        return new HostFunction[] { hostFunction, logHostFunction };
+    }
+
+    /**
+     * Logs a message from the QuickJS wasm runtime to the native logger.
+     * 
+     * @param instance
+     * @param args
+     * @return
+     */
+    private long[] logHostFunction(Instance instance, long... args) {
+        final int level = (int) args[0];
+        final int messagePtr = (int) args[1];
+        final int messageLen = (int) args[2];
+
+        final String message = instance.memory().readString(messagePtr, messageLen);
+        dealloc(messagePtr, messageLen);
+        switch (level) {
+            case 0:
+                // DO nothing -> log is off
+                break;
+            case 5:
+                NATIVE_LOGGER.trace(message);
+                break;
+            case 4:
+                NATIVE_LOGGER.debug(message);
+                break;
+            case 3:
+                NATIVE_LOGGER.info(message);
+                break;
+            case 2:
+                NATIVE_LOGGER.warn(message);
+                break;
+            case 1:
+                NATIVE_LOGGER.error(message);
+                break;
+            default:
+                NATIVE_LOGGER.error(message);
+        }
+        return new long[] {};
     }
 
     /**
@@ -89,6 +186,11 @@ public class QuickJSRuntime implements AutoCloseable {
         return context.callHostFunction(instance, functionPtr, argsPtr, argsLen);
     }
 
+    /**
+     * Creates a new context for this runtime.
+     * 
+     * @return
+     */
     public QuickJSContext createContext() {
         QuickJSContext context = new QuickJSContext(this);
         contexts.put(context.getContextPointer(), context);

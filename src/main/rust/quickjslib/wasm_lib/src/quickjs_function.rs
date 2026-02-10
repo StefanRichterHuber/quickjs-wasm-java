@@ -1,3 +1,4 @@
+use log::{debug, error};
 use rquickjs::{Context, Function, Persistent};
 use wasm_macros::wasm_export;
 
@@ -12,16 +13,17 @@ pub fn call_function<'js>(
     let result = context.with(|ctx| {
         let function = persistent_function.clone().restore(&ctx).unwrap();
 
+        debug!("Calling function with args: {:?}", args);
         let result = match function.call(args) {
             Ok(value) => value,
             Err(err) => {
-                println!("Error calling function: {}", err);
+                error!("Error calling function: {}", err);
                 return JSJavaProxy::Undefined;
             }
         };
         result
     });
-    println!("Function called result: {:?}", result);
+    debug!("Function call result: {:?}", result);
 
     result
 }

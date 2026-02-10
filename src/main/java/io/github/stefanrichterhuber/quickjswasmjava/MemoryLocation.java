@@ -13,7 +13,8 @@ public record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) i
 
     @Override
     public void close() {
-        // free();
+        // TODO check if freeing necesary
+        free();
     }
 
     /**
