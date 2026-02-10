@@ -259,4 +259,25 @@ public class QuickJSContextTest {
             }
         }
     }
+
+    @Test
+    public void testJavaExceptionHandling() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            BiFunction<Integer, Integer, Integer> add = (a, b) -> {
+                throw new RuntimeException("test");
+            };
+
+            context.setGlobal("add", add);
+            Object result = context.eval("add(1, 2)");
+
+            fail("Exception should have been thrown");
+        } catch (Exception e) {
+            assertInstanceOf(QuickJSException.class, e);
+            QuickJSException quickJSException = (QuickJSException) e;
+            assertEquals("test", quickJSException.getRawMessage());
+            System.out.println(e.getMessage());
+        }
+    }
 }

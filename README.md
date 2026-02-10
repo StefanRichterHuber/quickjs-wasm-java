@@ -47,7 +47,7 @@ The library seamlessly translates all supported Java types to JS types and vice 
 | `java.lang.Double` / `java.lang.Float` | `number` | QuickJS only supports boxed double values |
 | `java.lang.Integer` | `number` | QuickJS only supports boxed integer values |
 | `java.lang.String` | `string` | |
-| `QuickJSException` | `exception` | JS exceptions are translated to QuickJSException objects. Each exception contains a message and a stack trace (with exact line and column numbers)! |
+| `QuickJSException` | `exception` | JS exceptions are translated to QuickJSException objects. Each exception contains a message and a stack trace (with exact line and column numbers)! Java exceptions thrown in callbacks are transformed into a js exception and returned to Java as QuickJSException objects. The original java stacktrace, is lost, however. |
 | `java.util.List<Object>` | `array` | As of now java lists are copied to JS and vice versa. Values can be any supported type, including mixed types and nested lists/maps |
 | `java.util.Map<String, Object>` | `object` | As of now java maps are copied to JS and vice versa. Values can be any supported type, including mixed types and nested lists/maps. Keys must be strings |
 | `QuickJsFunction` | `function` | native JS functions are exported to Java as QuickJsFunction objects.  |

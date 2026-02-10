@@ -4,6 +4,7 @@ import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -12,6 +13,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -82,7 +84,6 @@ public class QuickJSContext implements AutoCloseable {
 
             Object result = null;
             if (realArgs instanceof List) {
-                @SuppressWarnings("unchecked")
                 List<Object> argsList = (List<Object>) realArgs;
                 result = function.apply(argsList);
             } else {
@@ -94,9 +95,15 @@ public class QuickJSContext implements AutoCloseable {
             // location here!)
             MemoryLocation resultLocation = this.writeToMemory(result);
             return new long[] { resultLocation.pack() };
-
+        } catch (RuntimeException e) {
+            try {
+                MemoryLocation resultLocation = this.writeToMemory(e);
+                return new long[] { resultLocation.pack() };
+            } catch (IOException e1) {
+                throw new RuntimeException("Error writing exception to memory", e);
+            }
         } catch (IOException e) {
-            throw new RuntimeException("Error calling host function", e);
+            throw new RuntimeException("Error writing result to memory", e);
         }
     }
 
@@ -294,7 +301,6 @@ public class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, R> void setGlobal(String name, Function<P, R> value) {
-        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             return value.apply((P) args.get(0));
         };
@@ -314,7 +320,6 @@ public class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, Q, R> void setGlobal(String name, BiFunction<P, Q, R> value) {
-        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             return value.apply((P) args.get(0), (Q) args.get(1));
         };
@@ -333,7 +338,6 @@ public class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, R> void setGlobal(String name, Consumer<P> value) {
-        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             value.accept((P) args.get(0));
             return null;
@@ -353,7 +357,6 @@ public class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, Q> void setGlobal(String name, BiConsumer<P, Q> value) {
-        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             value.accept((P) args.get(0), (Q) args.get(1));
             return null;
@@ -427,7 +430,6 @@ public class QuickJSContext implements AutoCloseable {
      * @param packer The message pack packer.
      * @throws IOException If the object cannot be packed.
      */
-    @SuppressWarnings("unchecked")
     void packObject(Object obj, MessagePacker packer) throws IOException {
         if (obj == null) {
             packer.packString("null");
@@ -488,6 +490,14 @@ public class QuickJSContext implements AutoCloseable {
                 return null;
             };
             packObject(wrapper, packer);
+        } else if (obj instanceof Exception) {
+            packer.packMapHeader(1);
+            packer.packString("exception");
+            packer.packArrayHeader(2);
+            packer.packString(((Exception) obj).getMessage());
+            packer.packString(
+                    Arrays.asList(((Exception) obj).getStackTrace()).stream().map(Object::toString)
+                            .collect(Collectors.joining("\n")));
         } else {
             throw new RuntimeException("Unsupported type: " + obj.getClass().getName());
         }

@@ -3,7 +3,7 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 /**
  * Represents a location in the QuickJS memory.
  */
-public record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) implements AutoCloseable {
+record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) implements AutoCloseable {
     /**
      * Frees the memory location.
      */
@@ -13,7 +13,6 @@ public record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) i
 
     @Override
     public void close() {
-        // TODO check if freeing necesary
         free();
     }
 

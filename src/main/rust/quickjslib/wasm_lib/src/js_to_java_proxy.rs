@@ -91,7 +91,10 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 let s = Value::from_function(func);
                 Ok(s)
             }
-            JSJavaProxy::Exception(_, _) => todo!(),
+            JSJavaProxy::Exception(msg, _stacktrace) => {
+                let exception = rquickjs::Exception::from_message(ctx.clone(), &msg)?;
+                Ok(exception.into_value())
+            }
         };
         result
     }
@@ -102,7 +105,6 @@ impl<'js> IntoArgs<'js> for JSJavaProxy {
         match self {
             JSJavaProxy::Array(values) => values.len(),
             JSJavaProxy::Undefined => 0,
-            JSJavaProxy::Exception(_, _) => todo!(),
             _ => 1,
         }
     }
@@ -270,7 +272,13 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
         let arg = JSJavaProxy::Array(args);
         let result = (self.call)(arg);
 
-        result.into_js(params.ctx())
+        // If the result is an exception, throw it
+        if let JSJavaProxy::Exception(message, _stacktrace) = &result {
+            let exception = rquickjs::Exception::from_message(params.ctx().clone(), &message)?;
+            Err(params.ctx().throw(exception.into_value()))
+        } else {
+            result.into_js(params.ctx())
+        }
     }
 }
 
