@@ -390,7 +390,12 @@ public class QuickJSRuntime implements AutoCloseable {
         }
         contexts.clear();
 
-        closeRuntime.apply(getRuntimePointer());
+        try {
+            closeRuntime.apply(getRuntimePointer());
+        } catch (Exception e) {
+            // Maybe the runtime was already closed?
+            LOGGER.warn("Error closing runtime", e);
+        }
         ptr = 0;
     }
 }

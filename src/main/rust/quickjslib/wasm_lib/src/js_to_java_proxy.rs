@@ -1,6 +1,5 @@
 use log::debug;
 use log::error;
-use log::info;
 use rquickjs::function::Args;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::function::ParamRequirement;
@@ -192,7 +191,11 @@ impl JSJavaProxy {
             return Ok(JSJavaProxy::Object(map));
         }
 
-        Ok(JSJavaProxy::Undefined)
+        error!(
+            "Unknown value type for conversion to JSJavaProxy: {:?}",
+            value
+        );
+        Err(rquickjs::Error::Unknown)
     }
 }
 
