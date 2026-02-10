@@ -1,4 +1,4 @@
-use log::{debug, error};
+use log::debug;
 use rquickjs::{Context, Function, Persistent};
 use wasm_macros::wasm_export;
 

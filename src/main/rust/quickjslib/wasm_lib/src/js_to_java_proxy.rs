@@ -40,13 +40,13 @@ pub enum JSJavaProxy {
 
 impl<'js> FromJs<'js> for JSJavaProxy {
     fn from_js(_ctx: &rquickjs::Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
-        Ok(JSJavaProxy::convert(&value))
+        JSJavaProxy::convert(&value)
     }
 }
 
 impl<'js> FromAtom<'js> for JSJavaProxy {
     fn from_atom(atom: Atom<'js>) -> rquickjs::Result<Self> {
-        Ok(JSJavaProxy::convert(&atom.to_value()?))
+        JSJavaProxy::convert(&atom.to_value()?)
     }
 }
 
@@ -58,26 +58,27 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
             JSJavaProxy::Float(value) => Ok(Value::new_float(ctx.clone(), value)),
             JSJavaProxy::Int(value) => Ok(Value::new_int(ctx.clone(), value)),
             JSJavaProxy::Boolean(value) => Ok(Value::new_bool(ctx.clone(), value)),
-            JSJavaProxy::String(value) => Ok(Value::from_string(
-                rquickjs::String::from_str(ctx.clone(), value.as_str()).unwrap(),
-            )),
+            JSJavaProxy::String(value) => Ok(Value::from_string(rquickjs::String::from_str(
+                ctx.clone(),
+                value.as_str(),
+            )?)),
             JSJavaProxy::Array(values) => {
-                let array = rquickjs::Array::new(ctx.clone()).unwrap();
+                let array = rquickjs::Array::new(ctx.clone())?;
                 for (i, value) in values.into_iter().enumerate() {
-                    array.set(i, value).unwrap();
+                    array.set(i, value)?;
                 }
                 Ok(array.into_value())
             }
             JSJavaProxy::Object(values) => {
-                let obj = rquickjs::Object::new(ctx.clone()).unwrap();
+                let obj = rquickjs::Object::new(ctx.clone())?;
                 for (key, value) in values.into_iter() {
-                    obj.set(key, value).unwrap();
+                    obj.set(key, value)?;
                 }
                 Ok(obj.into_value())
             }
             JSJavaProxy::Function(_name, ptr) => {
                 let function = unsafe { Box::from_raw(ptr as *mut Persistent<Function>) };
-                let restored_function = function.clone().restore(ctx).unwrap();
+                let restored_function = function.clone().restore(ctx)?;
                 _ = Box::into_raw(function);
                 Ok(restored_function.into_value())
             }
@@ -87,7 +88,7 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                     function_ptr, ctx_ptr
                 );
                 let f = JavaFunction::new(ctx_ptr, function_ptr);
-                let func = Function::new::<JSJavaProxy, JavaFunction>(ctx.clone(), f).unwrap();
+                let func = Function::new::<JSJavaProxy, JavaFunction>(ctx.clone(), f)?;
                 let s = Value::from_function(func);
                 Ok(s)
             }
@@ -111,13 +112,13 @@ impl<'js> IntoArgs<'js> for JSJavaProxy {
         match self {
             JSJavaProxy::Array(values) => {
                 for value in values {
-                    args.push_arg(value).unwrap();
+                    args.push_arg(value)?;
                 }
                 Ok(())
             }
             JSJavaProxy::Undefined => Ok(()),
             _ => {
-                args.push_arg(self).unwrap();
+                args.push_arg(self)?;
                 Ok(())
             }
         }
@@ -125,56 +126,58 @@ impl<'js> IntoArgs<'js> for JSJavaProxy {
 }
 
 impl JSJavaProxy {
-    pub fn convert<'js>(value: &Value<'js>) -> JSJavaProxy {
+    pub fn convert<'js>(value: &Value<'js>) -> rquickjs::Result<JSJavaProxy> {
         if value.is_null() {
-            return JSJavaProxy::Null;
+            return Ok(JSJavaProxy::Null);
         } else if value.is_undefined() {
-            return JSJavaProxy::Undefined;
+            return Ok(JSJavaProxy::Undefined);
         } else if value.is_function() {
             let function = value.as_function().unwrap();
 
-            let name: String = function.get("name").unwrap();
+            let name: String = function.get("name")?;
 
             let persistent_function = Persistent::save(function.ctx(), function.clone());
             let persistent_function_ptr = Box::into_raw(Box::new(persistent_function)) as u64;
 
             debug!("Exported function: {} -> {}", name, persistent_function_ptr);
-            return JSJavaProxy::Function(name, persistent_function_ptr);
+            return Ok(JSJavaProxy::Function(name, persistent_function_ptr));
         } else if value.is_string() {
             let string = value.as_string().unwrap();
-            return JSJavaProxy::String(string.to_string().unwrap());
+            return Ok(JSJavaProxy::String(string.to_string().unwrap()));
         } else if value.is_int() {
             let number = value.as_int().unwrap();
-            return JSJavaProxy::Int(number);
+            return Ok(JSJavaProxy::Int(number));
         } else if value.is_float() {
             let number = value.as_float().unwrap();
-            return JSJavaProxy::Float(number);
+            return Ok(JSJavaProxy::Float(number));
         } else if value.is_bool() {
             let boolean = value.as_bool().unwrap();
-            return JSJavaProxy::Boolean(boolean);
+            return Ok(JSJavaProxy::Boolean(boolean));
         } else if value.is_exception() {
-            info!("Converting exception");
+            debug!("Converting js exception to java exception");
             let exception = value.as_exception().unwrap();
-            let message = exception.message().unwrap();
-            let stacktrace = exception.stack().unwrap();
-            return JSJavaProxy::Exception(message, stacktrace);
+            let message = exception
+                .message()
+                .unwrap_or("<No exception message>".to_string());
+            let stacktrace = exception.stack().unwrap_or("<No stacktrace>".to_string());
+            return Ok(JSJavaProxy::Exception(message, stacktrace));
         } else if value.is_array() {
-            info!("Converting array");
+            debug!("Converting js array to java array");
             // TODO create reference to array instead of copying
             let array = value.as_array().unwrap();
             let mut vec = Vec::new();
             for i in 0..array.len() {
-                vec.push(JSJavaProxy::convert(&array.get(i).unwrap()));
+                vec.push(JSJavaProxy::convert(&array.get(i)?)?);
             }
-            return JSJavaProxy::Array(vec);
+            return Ok(JSJavaProxy::Array(vec));
         } else if value.is_object() {
-            info!("Converting object");
+            debug!("Converting js object to java map");
             // TODO create reference to object instead of copying
             let object = value.as_object().unwrap();
             let mut map = HashMap::new();
 
             for key in object.keys().into_iter() {
-                let key_value: JSJavaProxy = key.unwrap();
+                let key_value: JSJavaProxy = key?;
                 let key_string = match key_value {
                     JSJavaProxy::String(s) => s,
                     _ => panic!("Key is not a string"),
@@ -182,14 +185,14 @@ impl JSJavaProxy {
 
                 map.insert(
                     key_string.clone(),
-                    JSJavaProxy::convert(&object.get(key_string).unwrap()),
+                    JSJavaProxy::convert(&object.get(key_string)?)?,
                 );
             }
 
-            return JSJavaProxy::Object(map);
+            return Ok(JSJavaProxy::Object(map));
         }
 
-        JSJavaProxy::Undefined
+        Ok(JSJavaProxy::Undefined)
     }
 }
 
@@ -257,7 +260,7 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
         for i in 0..params.len() {
             let value = params.arg(i);
             if let Some(v) = value {
-                args.push(JSJavaProxy::convert(&v));
+                args.push(JSJavaProxy::convert(&v)?);
             }
         }
 
