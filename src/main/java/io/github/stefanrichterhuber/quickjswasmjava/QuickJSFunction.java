@@ -15,13 +15,28 @@ public final class QuickJSFunction implements Function<Object[], Object> {
     private final long functionPtr;
     private final ExportFunction call;
 
-    public QuickJSFunction(QuickJSContext context, String name, long functionPtr) {
+    /**
+     * Creates a new QuickJSFunction
+     * 
+     * @param context     the context to use
+     * @param name        the name of the function
+     * @param functionPtr the pointer to the function in the wasm library
+     */
+    QuickJSFunction(QuickJSContext context, String name, long functionPtr) {
         this.context = context;
         this.name = name;
         this.functionPtr = functionPtr;
         this.call = context.getRuntime().getInstance().export("call_function_wasm");
+        context.addDependendResource(this::close);
     }
 
+    /**
+     * Calls the function with the given arguments
+     * 
+     * @param args the arguments to pass to the function
+     * @return the result of the function call
+     * @throws IOException if an I/O error occurs
+     */
     public Object call(Object... args) throws IOException {
         // We create a message pack object from the arguments, with the root of the pack
         // being an array
@@ -41,8 +56,31 @@ public final class QuickJSFunction implements Function<Object[], Object> {
 
     }
 
+    /**
+     * Closes the function
+     * 
+     * @throws Exception
+     */
+    private void close() throws Exception {
+        // TODO implement cleanup
+    }
+
+    /**
+     * Returns the name of the function
+     * 
+     * @return
+     */
     public String getName() {
         return name;
+    }
+
+    /**
+     * Returns the pointer to the function in the wasm library
+     * 
+     * @return
+     */
+    long getFunctionPointer() {
+        return functionPtr;
     }
 
     @Override
@@ -52,5 +90,32 @@ public final class QuickJSFunction implements Function<Object[], Object> {
         } catch (IOException e) {
             throw new RuntimeException(e);
         }
+    }
+
+    @Override
+    public String toString() {
+        return String.format("function %s(...)", name);
+    }
+
+    @Override
+    public int hashCode() {
+        final int prime = 31;
+        int result = 1;
+        result = prime * result + (int) (functionPtr ^ (functionPtr >>> 32));
+        return result;
+    }
+
+    @Override
+    public boolean equals(Object obj) {
+        if (this == obj)
+            return true;
+        if (obj == null)
+            return false;
+        if (getClass() != obj.getClass())
+            return false;
+        QuickJSFunction other = (QuickJSFunction) obj;
+        if (functionPtr != other.functionPtr)
+            return false;
+        return true;
     }
 }

@@ -7,7 +7,11 @@ import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -23,14 +27,15 @@ import com.dylibso.chicory.runtime.Instance;
 public class QuickJSContext implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private final long contextPtr;
+    private long contextPtr;
     private final QuickJSRuntime runtime;
     private final ExportFunction eval;
     private final ExportFunction createContext;
     private final ExportFunction setGlobal;
-    @SuppressWarnings("unused")
     private final ExportFunction closeContext;
+    private final ExportFunction getGlobal;
 
+    private final List<AutoCloseable> dependendResources = new ArrayList<>();
     private final List<Function<List<Object>, Object>> hostFunctions = new ArrayList<>();
 
     /**
@@ -45,8 +50,13 @@ public class QuickJSContext implements AutoCloseable {
         this.closeContext = runtime.getInstance().export("close_context_wasm");
         this.eval = runtime.getInstance().export("eval_script_wasm");
         this.setGlobal = runtime.getInstance().export("set_global_wasm");
+        this.getGlobal = runtime.getInstance().export("get_global_wasm");
         this.contextPtr = createContext.apply(runtime.getRuntimePointer())[0];
 
+    }
+
+    void addDependendResource(AutoCloseable resource) {
+        dependendResources.add(resource);
     }
 
     /**
@@ -113,6 +123,10 @@ public class QuickJSContext implements AutoCloseable {
             // Cleanup the memory location after reading the result
             try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
                 final Object r = unpackObjectFromMemory(resultLocation);
+                if (r instanceof RuntimeException) {
+                    throw (RuntimeException) r;
+                }
+
                 return r;
             }
         } finally {
@@ -128,7 +142,7 @@ public class QuickJSContext implements AutoCloseable {
      * @param value The value of the global variable.
      * @throws IOException If the global variable cannot be set.
      */
-    public void setGlobal(String name, Object value) throws IOException {
+    private void setGlobal(String name, Object value) throws IOException {
 
         LOGGER.debug("Setting global: {} = {}", name, value);
 
@@ -139,9 +153,234 @@ public class QuickJSContext implements AutoCloseable {
         // set global function
         final MemoryLocation valueLocation = this.writeToMemory(value);
         // Then call the set global function
-        setGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length(), valueLocation.pointer(),
+        final long[] result = setGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length(),
+                valueLocation.pointer(),
                 valueLocation.length());
 
+        // Cleanup the memory location after reading the result
+        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
+            final Object r = unpackObjectFromMemory(resultLocation);
+            if (r == null) {
+                return;
+            }
+            if (r instanceof RuntimeException) {
+                throw (RuntimeException) r;
+            } else {
+                throw new RuntimeException("Unexpected result: " + r);
+            }
+        }
+    }
+
+    /**
+     * Gets a global variable from the QuickJS context.
+     * 
+     * @param name The name of the global variable.
+     * @return The global variable.
+     */
+    public Object getGlobal(String name) {
+        LOGGER.debug("Getting global: {}", name);
+
+        // We must not close the memory location here, because it is used by the
+        // set global function
+        final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name);
+
+        final long[] result = getGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length());
+
+        // Cleanup the memory location after reading the result
+        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
+            final Object r = unpackObjectFromMemory(resultLocation);
+            if (r instanceof RuntimeException) {
+                throw (RuntimeException) r;
+            } else {
+                return r;
+            }
+        } catch (IOException e) {
+            throw new RuntimeException("Error getting global variable from JS context: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
+     */
+    public void setGlobal(String name, Double value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
+     */
+    public void setGlobal(String name, Integer value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
+     */
+    public void setGlobal(String name, String value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
+     */
+    public void setGlobal(String name, Boolean value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
+     * @param <T>   Any supported java type, including other lists and maps
+     */
+    public <T> void setGlobal(String name, List<T> value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
+     * @param <T>   Any supported java type, including other lists and maps
+     */
+    public <T> void setGlobal(String name, Map<String, T> value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Imports a java function as a global function in the QuickJS context.
+     * 
+     * @param <P>   The type of the parameter of the function.
+     * @param <R>   The type of the return value of the function.
+     * @param name  The name of the global function.
+     * @param value The function to set.
+     */
+    public <P, R> void setGlobal(String name, Function<P, R> value) {
+        @SuppressWarnings("unchecked")
+        final Function<List<Object>, Object> function = (args) -> {
+            return value.apply((P) args.get(0));
+        };
+        try {
+            setGlobal(name, (Object) function);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Imports a java function as a global function in the QuickJS context.
+     * 
+     * @param <P>   The type of the parameter of the function.
+     * @param <R>   The type of the return value of the function.
+     * @param name  The name of the global function.
+     * @param value The function to set.
+     */
+    public <P, Q, R> void setGlobal(String name, BiFunction<P, Q, R> value) {
+        @SuppressWarnings("unchecked")
+        final Function<List<Object>, Object> function = (args) -> {
+            return value.apply((P) args.get(0), (Q) args.get(1));
+        };
+        try {
+            setGlobal(name, (Object) function);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Imports a java function as a global function in the QuickJS context.
+     * 
+     * @param <P>   The type of the parameter of the function.
+     * @param name  The name of the global function.
+     * @param value The function to set.
+     */
+    public <P, R> void setGlobal(String name, Consumer<P> value) {
+        @SuppressWarnings("unchecked")
+        final Function<List<Object>, Object> function = (args) -> {
+            value.accept((P) args.get(0));
+            return null;
+        };
+        try {
+            setGlobal(name, (Object) function);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Imports a java function as a global function in the QuickJS context.
+     * 
+     * @param <P>   The type of the parameter of the function.
+     * @param name  The name of the global function.
+     * @param value The function to set.
+     */
+    public <P, Q> void setGlobal(String name, BiConsumer<P, Q> value) {
+        @SuppressWarnings("unchecked")
+        final Function<List<Object>, Object> function = (args) -> {
+            value.accept((P) args.get(0), (Q) args.get(1));
+            return null;
+        };
+        try {
+            setGlobal(name, (Object) function);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Imports a java function as a global function in the QuickJS context.
+     * 
+     * @param <R>   The type of the parameter of the function.
+     * @param name  The name of the global function.
+     * @param value The function to set.
+     */
+    public <R> void setGlobal(String name, Supplier<R> value) {
+        final Function<List<Object>, Object> function = (args) -> {
+            return value.get();
+        };
+        try {
+            setGlobal(name, (Object) function);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
     }
 
     /**
@@ -166,6 +405,9 @@ public class QuickJSContext implements AutoCloseable {
      * @return The pointer to the QuickJS context.
      */
     long getContextPointer() {
+        if (contextPtr == 0) {
+            throw new IllegalStateException("Context already closed");
+        }
         return contextPtr;
     }
 
@@ -189,57 +431,65 @@ public class QuickJSContext implements AutoCloseable {
     void packObject(Object obj, MessagePacker packer) throws IOException {
         if (obj == null) {
             packer.packString("null");
-        } else {
-            if (obj instanceof Double) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("float");
-                packer.packDouble(((Double) obj).doubleValue());
-            } else if (obj instanceof Integer) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("int");
-                packer.packInt(((Integer) obj).intValue());
-            } else if (obj instanceof Boolean) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("boolean");
-                packer.packBoolean(((Boolean) obj).booleanValue());
-            } else if (obj instanceof String) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("string");
-                packer.packString((String) obj);
-            } else if (obj instanceof List) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("array");
-                packer.packArrayHeader(((List<?>) obj).size());
-                for (Object item : (List<?>) obj) {
-                    packObject(item, packer);
-                }
-            } else if (obj instanceof Map) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("object");
-                packer.packMapHeader(((Map<?, ?>) obj).size());
-                for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
-                    packer.packString((String) entry.getKey());
-                    packObject(entry.getValue(), packer);
-                }
-            } else if (obj instanceof Function) {
-                // Here we must create the map first
-                packer.packMapHeader(1);
-                packer.packString("javaFunction");
-
-                packer.packArrayHeader(2);
-                packer.packInt((int) this.getContextPointer());
-                packer.packInt((int) hostFunctions.size());
-                hostFunctions.add((Function<List<Object>, Object>) obj);
-            } else {
-                throw new RuntimeException("Unsupported type: " + obj.getClass().getName());
+        } else if (obj instanceof Double) {
+            packer.packMapHeader(1);
+            packer.packString("float");
+            packer.packDouble(((Double) obj).doubleValue());
+        } else if (obj instanceof Float) {
+            packObject(((Float) obj).doubleValue(), packer);
+        } else if (obj instanceof Integer) {
+            packer.packMapHeader(1);
+            packer.packString("int");
+            packer.packInt(((Integer) obj).intValue());
+        } else if (obj instanceof Boolean) {
+            packer.packMapHeader(1);
+            packer.packString("boolean");
+            packer.packBoolean(((Boolean) obj).booleanValue());
+        } else if (obj instanceof String) {
+            packer.packMapHeader(1);
+            packer.packString("string");
+            packer.packString((String) obj);
+        } else if (obj instanceof List) {
+            packer.packMapHeader(1);
+            packer.packString("array");
+            packer.packArrayHeader(((List<?>) obj).size());
+            for (Object item : (List<?>) obj) {
+                packObject(item, packer);
             }
-
+        } else if (obj instanceof Map) {
+            packer.packMapHeader(1);
+            packer.packString("object");
+            packer.packMapHeader(((Map<?, ?>) obj).size());
+            for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
+                packer.packString(entry.getKey().toString());
+                packObject(entry.getValue(), packer);
+            }
+        } else if (obj instanceof Function) {
+            packer.packMapHeader(1);
+            packer.packString("javaFunction");
+            packer.packArrayHeader(2);
+            packer.packInt((int) this.getContextPointer());
+            packer.packInt((int) hostFunctions.size());
+            hostFunctions.add((Function<List<Object>, Object>) obj);
+        } else if (obj instanceof QuickJSFunction) {
+            packer.packMapHeader(1);
+            packer.packString("function");
+            packer.packArrayHeader(2);
+            packer.packString(((QuickJSFunction) obj).getName());
+            packer.packLong(((QuickJSFunction) obj).getFunctionPointer());
+        } else if (obj instanceof Supplier) {
+            // Wrap the supplier as a function that takes no arguments
+            Function<List<Object>, Object> wrapper = (args) -> ((Supplier<Object>) obj).get();
+            packObject(wrapper, packer);
+        } else if (obj instanceof Consumer) {
+            // Wrap the consumer as a function that takes one argument
+            Function<List<Object>, Object> wrapper = (args) -> {
+                ((Consumer<List<Object>>) obj).accept(args);
+                return null;
+            };
+            packObject(wrapper, packer);
+        } else {
+            throw new RuntimeException("Unsupported type: " + obj.getClass().getName());
         }
     }
 
@@ -335,6 +585,16 @@ public class QuickJSContext implements AutoCloseable {
                     }
                     return hostFunctions.get(functionIndex);
                 }
+                case "exception": {
+                    int arraySize = unpacker.unpackArrayHeader();
+                    if (arraySize != 2) {
+                        throw new RuntimeException(
+                                "Expected array with 2 element (exception message, exception stack)");
+                    }
+                    String message = unpacker.unpackString();
+                    String stack = unpacker.unpackString();
+                    return new QuickJSException(message, stack);
+                }
                 default:
                     throw new RuntimeException("Unknown type: " + type);
             }
@@ -350,8 +610,26 @@ public class QuickJSContext implements AutoCloseable {
         return null;
     }
 
+    /**
+     * Closes the context and all associated resources
+     */
     @Override
     public void close() throws Exception {
-        // TODO implement cleanup
+        if (contextPtr == 0) {
+            return;
+        }
+        for (var resource : dependendResources) {
+            resource.close();
+        }
+        dependendResources.clear();
+        hostFunctions.clear();
+
+        try {
+            closeContext.apply(contextPtr);
+        } catch (Exception e) {
+            // Closing the context might fail after a runtime limit was reached
+            LOGGER.error("Error closing QuickJS context", e);
+        }
+        contextPtr = 0;
     }
 }

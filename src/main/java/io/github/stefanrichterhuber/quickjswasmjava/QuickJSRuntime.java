@@ -33,11 +33,12 @@ public class QuickJSRuntime implements AutoCloseable {
     private static final Logger NATIVE_LOGGER = LogManager
             .getLogger("io.github.stefanrichterhuber.quickjswasmjava.native.WasmLib");
 
-    private final long ptr;
+    private long ptr;
     private final Store store;
     private final Instance instance;
     private final ExportFunction alloc;
     private final ExportFunction dealloc;
+    private final ExportFunction closeRuntime;
 
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
 
@@ -72,6 +73,7 @@ public class QuickJSRuntime implements AutoCloseable {
 
             this.alloc = instance.export("alloc");
             this.dealloc = instance.export("dealloc");
+            this.closeRuntime = instance.export("close_runtime_wasm");
 
             initLogging();
 
@@ -276,20 +278,42 @@ public class QuickJSRuntime implements AutoCloseable {
         return context;
     }
 
+    /**
+     * Returns the pointer to the runtime in the wasm library
+     * 
+     * @return
+     */
     long getRuntimePointer() {
         return this.ptr;
     }
 
+    /**
+     * Returns the instance of the runtime
+     * 
+     * @return
+     */
     Instance getInstance() {
         return this.instance;
     }
 
+    /**
+     * Writes the given data to memory and returns the memory location of the data
+     * 
+     * @param data the data to write
+     * @return the memory location of the data
+     */
     MemoryLocation writeToMemory(byte[] data) {
         long ptr = alloc(data.length);
         getInstance().memory().write((int) ptr, data);
         return new MemoryLocation(ptr, data.length, this);
     }
 
+    /**
+     * Writes the given string to memory and returns the memory location of the data
+     * 
+     * @param data the string to write
+     * @return the memory location of the data
+     */
     MemoryLocation writeToMemory(String data) {
         return writeToMemory(data.getBytes(StandardCharsets.UTF_8));
     }
@@ -297,8 +321,8 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Reads the string from memory
      * 
-     * @param result
-     * @return
+     * @param result the result of the memory location
+     * @return the string read from memory
      */
     String readStringFromMemory(long... result) {
         int resultLen = (int) (result[0] & 0xffffffff);
@@ -309,8 +333,8 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Reads the bytes from memory
      * 
-     * @param result
-     * @return
+     * @param result the result of the memory location
+     * @return the bytes read from memory
      */
     byte[] readBytesFromMemory(long... result) {
         int resultLen = (int) (result[0] & 0xffffffff);
@@ -321,8 +345,8 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Unpacks the bytes from memory into a MessageUnpacker
      * 
-     * @param result
-     * @return
+     * @param result the result of the memory location
+     * @return the MessageUnpacker
      */
     MessageUnpacker unpackBytesFromMemory(long... result) {
         byte[] resultBytes = readBytesFromMemory(result);
@@ -333,8 +357,8 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Allocates memory
      * 
-     * @param size
-     * @return
+     * @param size the size of the memory to allocate
+     * @return the pointer to the allocated memory
      */
     long alloc(int size) {
         long[] ptr = alloc.apply(size);
@@ -344,15 +368,29 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Deallocates memory
      * 
-     * @param ptr
-     * @param size
+     * @param ptr  the pointer to the memory to deallocate
+     * @param size the size of the memory to deallocate
      */
     void dealloc(long ptr, int size) {
         dealloc.apply(ptr, size);
     }
 
+    /**
+     * Closes the runtime and all associated contexts
+     */
     @Override
     public void close() throws Exception {
-        // TODO implement cleanup
+        if (ptr == 0) {
+            LOGGER.warn("Tried to close QuickJS runtime that was already closed");
+            return;
+        }
+
+        for (QuickJSContext context : contexts.values()) {
+            context.close();
+        }
+        contexts.clear();
+
+        closeRuntime.apply(getRuntimePointer());
+        ptr = 0;
     }
 }

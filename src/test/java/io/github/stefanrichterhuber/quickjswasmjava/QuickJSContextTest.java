@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.fail;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.TimeUnit;
+import java.util.function.BiFunction;
 import java.util.function.Function;
 
 import org.junit.jupiter.api.Test;
@@ -171,12 +172,49 @@ public class QuickJSContextTest {
     }
 
     @Test
+    public void testGetGlobal() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+            {
+                context.setGlobal("a", 42);
+                Object result = context.getGlobal("a");
+                assertEquals(42, result);
+            }
+            {
+                context.setGlobal("a", "hello");
+                Object result = context.getGlobal("a");
+                assertEquals("hello", result);
+            }
+            {
+                context.setGlobal("a", true);
+                Object result = context.getGlobal("a");
+                assertEquals(true, result);
+            }
+            {
+                context.setGlobal("a", 3.14);
+                Object result = context.getGlobal("a");
+                assertEquals(3.14, result);
+            }
+            {
+                context.setGlobal("a", List.of(1, 2, 3));
+                Object result = context.getGlobal("a");
+                assertEquals(List.of(1, 2, 3), result);
+            }
+            {
+                context.setGlobal("a", Map.of("b", 42));
+                Object result = context.getGlobal("a");
+                assertEquals(Map.of("b", 42), result);
+            }
+        }
+    }
+
+    @Test
     public void exportJavaFunctionsToJS() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
                 QuickJSContext context = runtime.createContext()) {
 
-            Function<List<Object>, Object> add = args -> {
-                return (Integer) args.get(0) + (Integer) args.get(1);
+            BiFunction<Integer, Integer, Integer> add = (a, b) -> {
+                return a + b;
             };
 
             context.setGlobal("add", add);
@@ -194,7 +232,7 @@ public class QuickJSContextTest {
                 context.eval("while(true){}");
                 fail("Script runtime limit should have been reached");
             } catch (Exception e) {
-                // Expected exception
+                System.out.println(e.getMessage());
             }
         }
     }

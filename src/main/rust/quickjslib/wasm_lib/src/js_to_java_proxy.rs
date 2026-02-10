@@ -1,5 +1,6 @@
 use log::debug;
 use log::error;
+use log::info;
 use rquickjs::function::Args;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::function::ParamRequirement;
@@ -29,20 +30,23 @@ pub enum JSJavaProxy {
     Boolean(bool),
     Array(Vec<JSJavaProxy>),
     Object(HashMap<String, JSJavaProxy>),
+    // Name, function pointer
     Function(String, u64),
     // context, function_ptr
     JavaFunction(i32, i32),
+    // Message, Stacktrace
+    Exception(String, String),
 }
 
 impl<'js> FromJs<'js> for JSJavaProxy {
     fn from_js(_ctx: &rquickjs::Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
-        Ok(JSJavaProxy::convert(value))
+        Ok(JSJavaProxy::convert(&value))
     }
 }
 
 impl<'js> FromAtom<'js> for JSJavaProxy {
     fn from_atom(atom: Atom<'js>) -> rquickjs::Result<Self> {
-        Ok(JSJavaProxy::convert(atom.to_value()?))
+        Ok(JSJavaProxy::convert(&atom.to_value()?))
     }
 }
 
@@ -87,6 +91,7 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 let s = Value::from_function(func);
                 Ok(s)
             }
+            JSJavaProxy::Exception(_, _) => todo!(),
         };
         result
     }
@@ -97,6 +102,7 @@ impl<'js> IntoArgs<'js> for JSJavaProxy {
         match self {
             JSJavaProxy::Array(values) => values.len(),
             JSJavaProxy::Undefined => 0,
+            JSJavaProxy::Exception(_, _) => todo!(),
             _ => 1,
         }
     }
@@ -119,7 +125,7 @@ impl<'js> IntoArgs<'js> for JSJavaProxy {
 }
 
 impl JSJavaProxy {
-    pub fn convert<'js>(value: Value<'js>) -> JSJavaProxy {
+    pub fn convert<'js>(value: &Value<'js>) -> JSJavaProxy {
         if value.is_null() {
             return JSJavaProxy::Null;
         } else if value.is_undefined() {
@@ -146,15 +152,23 @@ impl JSJavaProxy {
         } else if value.is_bool() {
             let boolean = value.as_bool().unwrap();
             return JSJavaProxy::Boolean(boolean);
+        } else if value.is_exception() {
+            info!("Converting exception");
+            let exception = value.as_exception().unwrap();
+            let message = exception.message().unwrap();
+            let stacktrace = exception.stack().unwrap();
+            return JSJavaProxy::Exception(message, stacktrace);
         } else if value.is_array() {
+            info!("Converting array");
             // TODO create reference to array instead of copying
             let array = value.as_array().unwrap();
             let mut vec = Vec::new();
             for i in 0..array.len() {
-                vec.push(JSJavaProxy::convert(array.get(i).unwrap()));
+                vec.push(JSJavaProxy::convert(&array.get(i).unwrap()));
             }
             return JSJavaProxy::Array(vec);
         } else if value.is_object() {
+            info!("Converting object");
             // TODO create reference to object instead of copying
             let object = value.as_object().unwrap();
             let mut map = HashMap::new();
@@ -168,7 +182,7 @@ impl JSJavaProxy {
 
                 map.insert(
                     key_string.clone(),
-                    JSJavaProxy::convert(object.get(key_string).unwrap()),
+                    JSJavaProxy::convert(&object.get(key_string).unwrap()),
                 );
             }
 
@@ -243,7 +257,7 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
         for i in 0..params.len() {
             let value = params.arg(i);
             if let Some(v) = value {
-                args.push(JSJavaProxy::convert(v));
+                args.push(JSJavaProxy::convert(&v));
             }
         }
 

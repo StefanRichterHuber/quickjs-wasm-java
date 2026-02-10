@@ -1,10 +1,10 @@
-use log::info;
+use log::debug;
 use rquickjs::Runtime;
 use wasm_macros::wasm_export;
 
 #[wasm_export]
 pub fn create_runtime() -> Box<Runtime> {
-    info!("Created new QuickJS runtime");
+    debug!("Created new QuickJS runtime");
 
     let runtime = Runtime::new().unwrap();
     let interrrupt_handler = move || {
@@ -25,6 +25,6 @@ extern "C" {
 
 #[wasm_export]
 pub fn close_runtime(runtime: Box<Runtime>) {
-    info!("Closing QuickJS runtime");
+    debug!("Closing QuickJS runtime");
     drop(runtime);
 }

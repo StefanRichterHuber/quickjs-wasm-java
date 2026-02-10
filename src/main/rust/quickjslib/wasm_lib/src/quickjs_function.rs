@@ -2,7 +2,7 @@ use log::{debug, error};
 use rquickjs::{Context, Function, Persistent};
 use wasm_macros::wasm_export;
 
-use crate::js_to_java_proxy::JSJavaProxy;
+use crate::{context::handle_error, js_to_java_proxy::JSJavaProxy};
 
 #[wasm_export]
 pub fn call_function<'js>(
@@ -16,10 +16,7 @@ pub fn call_function<'js>(
         debug!("Calling function with args: {:?}", args);
         let result = match function.call(args) {
             Ok(value) => value,
-            Err(err) => {
-                error!("Error calling function: {}", err);
-                return JSJavaProxy::Undefined;
-            }
+            Err(err) => handle_error(err, ctx),
         };
         result
     });
