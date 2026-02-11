@@ -183,9 +183,8 @@ public final class QuickJSContext implements AutoCloseable {
      * 
      * @param name  The name of the global variable.
      * @param value The value of the global variable.
-     * @throws IOException If the global variable cannot be set.
      */
-    private void setGlobal(String name, Object value) throws IOException {
+    private void setGlobal(String name, Object value) {
 
         LOGGER.debug("Setting global: {} = {}", name, value);
 
@@ -247,11 +246,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The value of the global variable.
      */
     public void setGlobal(String name, Double value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -261,11 +256,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The value of the global variable.
      */
     public void setGlobal(String name, Integer value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -275,11 +266,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The value of the global variable.
      */
     public void setGlobal(String name, String value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -289,11 +276,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The value of the global variable.
      */
     public void setGlobal(String name, Boolean value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -304,11 +287,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param <T>   Any supported java type, including other lists and maps
      */
     public <T> void setGlobal(String name, List<T> value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -320,11 +299,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param <V>   Any supported java type, including other lists and maps
      */
     public <K, V> void setGlobal(String name, QuickJSObject<K, V> value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -335,11 +310,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param <T>   Any supported java type, including other lists and maps
      */
     public <T> void setGlobal(String name, Map<String, T> value) {
-        try {
-            setGlobal(name, (Object) value);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -354,11 +325,7 @@ public final class QuickJSContext implements AutoCloseable {
         final Function<List<Object>, Object> function = (args) -> {
             return value.apply((P) args.get(0));
         };
-        try {
-            setGlobal(name, (Object) function);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) function);
     }
 
     /**
@@ -374,11 +341,7 @@ public final class QuickJSContext implements AutoCloseable {
         final Function<List<Object>, Object> function = (args) -> {
             return value.apply((P) args.get(0), (Q) args.get(1));
         };
-        try {
-            setGlobal(name, (Object) function);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) function);
     }
 
     /**
@@ -393,11 +356,7 @@ public final class QuickJSContext implements AutoCloseable {
             value.accept((P) args.get(0));
             return null;
         };
-        try {
-            setGlobal(name, (Object) function);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) function);
     }
 
     /**
@@ -413,11 +372,7 @@ public final class QuickJSContext implements AutoCloseable {
             value.accept((P) args.get(0), (Q) args.get(1));
             return null;
         };
-        try {
-            setGlobal(name, (Object) function);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) function);
     }
 
     /**
@@ -431,11 +386,7 @@ public final class QuickJSContext implements AutoCloseable {
         final Function<List<Object>, Object> function = (args) -> {
             return value.get();
         };
-        try {
-            setGlobal(name, (Object) function);
-        } catch (IOException e) {
-            throw new RuntimeException("Error setting global variable: " + name, e);
-        }
+        setGlobal(name, (Object) function);
     }
 
     /**

@@ -250,6 +250,8 @@ public class QuickJSContextTest {
             assertInstanceOf(QuickJSObject.class, result);
 
             Map<String, Object> obj = (Map<String, Object>) result;
+            assertTrue(obj.containsKey("a"));
+            assertTrue(obj.containsKey("b"));
             assertEquals(2, obj.size());
             assertEquals(1, obj.get("a"));
             assertEquals("Hello", obj.get("b"));

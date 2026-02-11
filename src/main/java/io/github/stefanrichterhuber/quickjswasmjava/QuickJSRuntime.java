@@ -417,42 +417,6 @@ public final class QuickJSRuntime implements AutoCloseable {
     }
 
     /**
-     * Reads the string from memory
-     * 
-     * @param result the result of the memory location
-     * @return the string read from memory
-     */
-    String readStringFromMemory(long... result) {
-        int resultLen = (int) (result[0] & 0xffffffff);
-        int resultPtr = (int) ((result[0] >> 32) & 0xffffffff);
-        return getInstance().memory().readString(resultPtr, resultLen);
-    }
-
-    /**
-     * Reads the bytes from memory
-     * 
-     * @param result the result of the memory location
-     * @return the bytes read from memory
-     */
-    byte[] readBytesFromMemory(long... result) {
-        int resultLen = (int) (result[0] & 0xffffffff);
-        int resultPtr = (int) ((result[0] >> 32) & 0xffffffff);
-        return getInstance().memory().readBytes(resultPtr, resultLen);
-    }
-
-    /**
-     * Unpacks the bytes from memory into a MessageUnpacker
-     * 
-     * @param result the result of the memory location
-     * @return the MessageUnpacker
-     */
-    MessageUnpacker unpackBytesFromMemory(long... result) {
-        byte[] resultBytes = readBytesFromMemory(result);
-        MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(resultBytes);
-        return unpacker;
-    }
-
-    /**
      * Allocates memory
      * 
      * @param size the size of the memory to allocate
