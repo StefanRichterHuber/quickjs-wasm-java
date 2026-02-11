@@ -1,4 +1,4 @@
-use log::{debug, error, info, warn};
+use log::{debug, error, warn};
 use rquickjs::{object::ObjectKeysIter, Atom, Context, Ctx, IntoAtom, Object, Persistent};
 use wasm_macros::wasm_export;
 
@@ -87,10 +87,10 @@ fn get_value<'js>(
     let object = persistent_object.clone().restore(ctx)?;
     let key: Atom<'js> = key.into_atom(ctx)?;
     if object.contains_key(key.clone())? {
-        info!("Key {:?} exists in object", key.to_string()?);
+        debug!("Key {:?} exists in object", key.to_string()?);
         object.get(key.clone())?
     } else {
-        info!("Key {:?} does not exist in object", key.to_string()?);
+        debug!("Key {:?} does not exist in object", key.to_string()?);
         Ok(JSJavaProxy::Null)
     }
 }
@@ -143,7 +143,7 @@ pub fn object_set_value(
         }
     });
     if result {
-        info!("Value set in the native object");
+        debug!("Value set in the native object");
     } else {
         warn!("Value not set in the native object");
     }
@@ -171,7 +171,7 @@ pub fn object_key_set(
                     }
                 }
             }
-            info!("Keys: {:?}", keys);
+            debug!("Keys: {:?}", keys);
             JSJavaProxy::Array(keys)
         }
         Err(err) => {
