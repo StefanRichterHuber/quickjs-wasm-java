@@ -72,7 +72,7 @@ public final class QuickJSArray<T> extends AbstractList<T> {
     }
 
     private static long createNativeArray(QuickJSContext context) {
-        ExportFunction create = context.getRuntime().getInstance().export("array_create");
+        ExportFunction create = context.getRuntime().getInstance().export("array_create_wasm");
         long[] result = create.apply(context.getContextPointer());
         return result[0];
     }

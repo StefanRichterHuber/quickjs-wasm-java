@@ -283,6 +283,11 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * One can directly create native JS object on the java side using QuickJSObject
+     * 
+     * @throws Exception
+     */
     @Test
     public void testNativeObjectFromJavaSide() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -358,6 +363,45 @@ public class QuickJSContextTest {
             assertEquals(3, array.size());
             Object r3 = context.eval("a[0]");
             assertEquals(2, r3);
+
+        }
+    }
+
+    /**
+     * One can create native JS arrays directly on the java side using QuickJSArrays
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testNativeArraysFromJavaSide() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            List<Object> list = new QuickJSArray<>(context);
+            list.add("a");
+            list.add("b");
+            assertEquals(2, list.size());
+
+            context.setGlobal("a", list);
+            assertEquals("a", context.eval("a[0]"));
+            assertEquals("b", context.eval("a[1]"));
+
+            // Modification on the js side are visible in the java object
+
+            // Add element
+            context.eval("a[2]='c';");
+            assertEquals(3, list.size());
+            assertEquals("c", list.get(2));
+
+            // Reassign element
+            context.eval("a[0]='d'");
+            assertEquals(3, list.size());
+            assertEquals("d", list.get(0));
+
+            // Delete elements
+            context.eval(" a.splice(2, 1);  a.splice(1, 1);");
+            assertEquals(1, list.size());
+            assertEquals("d", list.get(0));
 
         }
     }
