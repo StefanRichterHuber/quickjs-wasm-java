@@ -91,9 +91,15 @@ This library uses log4j2 for logging on the java side and the `log` crate on the
 
 ## Architecture
 
+The application consists of two main parts: The java library providing a type-safe and convenient interface for the user and the native library implementing the actual QuickJS runtime.
+
 ### Java library
 
-The java library is bascally a wrapper over quicks with mainly typesafe interaction points exposed. The main entrypoint is `io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime` for the main runtime, also managing resource constraints and `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` for a unique the execution context. There are dependencies to log4j2 for logging, Chicory as wasm runtime and MessagePack for serializing data between Java and Rust. Several native objects (context, runtime, functions, object und array) are no longer managed by Rust lifetimes but by the java library as native pointers and need to be explicitly closed to prevent memory leaks. The user, however, does not have to explicitly close functions, objects and arrays, their lifecycle is managed by the corresponding  `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext`. If the `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` is closed, all native objects in the context are closed as well. The `io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime` on the other hand manages all created contexts and closes them as well when the runtime is closed. Therefore it is highly recommended to close both the `io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime` and all `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` when they are no longer needed. 
+The java library is bascally a wrapper over quicks with mainly typesafe interaction points exposed. The actual instance of the wasm library is managed by the main entrypoint `io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime`. The runtime also manages resource constraints and provides `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` object for a unique execution contexts. 
+
+Only very few dependencies are required: log4j2 for logging (both java and rust), Chicory as wasm runtime and MessagePack for serializing data between Java and Rust. 
+
+Several native objects (context, runtime, functions, object und array) are no longer managed by Rust lifetimes but by the java library as native pointers and need to be explicitly closed to prevent memory leaks. The user, however, does not have to explicitly close functions, objects and arrays, their lifecycle is managed by the corresponding  `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext`. If the `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` is closed, all native objects in the context are closed as well. The `io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime` on the other hand manages all created contexts and closes them as well when the runtime is closed. Therefore it is highly recommended to close both the `io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime` and all `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` when they are no longer needed. 
 
 ### Wasm library
 
