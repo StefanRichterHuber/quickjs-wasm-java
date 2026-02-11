@@ -1,4 +1,4 @@
-use log::{debug, error, info};
+use log::{debug, error, info, warn};
 use rquickjs::{object::ObjectKeysIter, Atom, Context, Ctx, IntoAtom, Object, Persistent};
 use wasm_macros::wasm_export;
 
@@ -84,9 +84,7 @@ fn get_value<'js>(
     persistent_object: &Persistent<Object<'static>>,
     key: JSJavaProxy,
 ) -> rquickjs::Result<JSJavaProxy> {
-    info!("Restoring persistent object");
     let object = persistent_object.clone().restore(ctx)?;
-    info!("Restored persistent object");
     let key: Atom<'js> = key.into_atom(ctx)?;
     if object.contains_key(key.clone())? {
         info!("Key {:?} exists in object", key.to_string()?);
@@ -145,9 +143,9 @@ pub fn object_set_value(
         }
     });
     if result {
-        debug!("Value set in the native object");
+        info!("Value set in the native object");
     } else {
-        debug!("Value not set in the native object");
+        warn!("Value not set in the native object");
     }
     result
 }
@@ -169,7 +167,7 @@ pub fn object_key_set(
                     }
                     Err(err) => {
                         error!("Failed to get key from object: {}", err);
-                        // keys.push(handle_error(err, ctx.clone()));
+                        keys.push(handle_error(err, ctx.clone()));
                     }
                 }
             }

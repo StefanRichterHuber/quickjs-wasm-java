@@ -140,8 +140,6 @@ public final class QuickJSContext implements AutoCloseable {
         } catch (RuntimeException e) {
             MemoryLocation resultLocation = this.writeToMemory(e);
             return new long[] { resultLocation.pack() };
-        } catch (IOException e) {
-            throw new RuntimeException("Error writing result to memory", e);
         }
     }
 
@@ -239,8 +237,6 @@ public final class QuickJSContext implements AutoCloseable {
             } else {
                 return r;
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Error getting global variable from JS context: " + name, e);
         }
     }
 
@@ -562,7 +558,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @return The unpacked object.
      * @throws IOException If the object cannot be unpacked.
      */
-    Object unpackObjectFromMemory(MemoryLocation memoryLocation) throws IOException {
+    Object unpackObjectFromMemory(MemoryLocation memoryLocation) {
         return unpackObjectFromMemory(memoryLocation.runtime().getInstance(), memoryLocation.pointer(),
                 memoryLocation.length());
     }
@@ -576,10 +572,14 @@ public final class QuickJSContext implements AutoCloseable {
      * @return The unpacked object.
      * @throws IOException If the object cannot be unpacked.
      */
-    Object unpackObjectFromMemory(Instance instance, long ptr, long len) throws IOException {
-        final byte[] bytes = instance.memory().readBytes((int) ptr, (int) len);
-        MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes);
-        return unpackObject(unpacker);
+    Object unpackObjectFromMemory(Instance instance, long ptr, long len) {
+        try {
+            final byte[] bytes = instance.memory().readBytes((int) ptr, (int) len);
+            MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes);
+            return unpackObject(unpacker);
+        } catch (IOException e) {
+            throw new RuntimeException("Failed to unpack object from memory", e);
+        }
     }
 
     /**

@@ -23,7 +23,6 @@ use crate::quickjs_function::call_java_function;
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum JSJavaProxy {
-    /// true if undefined, false if null
     Null,
     Undefined,
     String(String),
@@ -31,14 +30,16 @@ pub enum JSJavaProxy {
     Float(f64),
     Boolean(bool),
     Array(Vec<JSJavaProxy>),
+    /// Fields: Array Pointer
     NativeArray(u64),
     Object(HashMap<String, JSJavaProxy>),
+    /// Fields: Object Pointer
     NativeObject(u64),
-    // Name, function pointer
+    /// Fields: Function Name, function pointer
     Function(String, u64),
-    // context, function_ptr
+    /// Fields: Context, function_ptr
     JavaFunction(i32, i32),
-    // Message, Stacktrace
+    /// Fields: Message, Stacktrace
     Exception(String, String),
 }
 
@@ -93,9 +94,8 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 Ok(obj.into_value())
             }
             JSJavaProxy::Function(_name, ptr) => {
-                let function = unsafe { Box::from_raw(ptr as *mut Persistent<Function>) };
+                let function = unsafe { &*(ptr as *mut Persistent<Function>) };
                 let restored_function = function.clone().restore(ctx)?;
-                _ = Box::into_raw(function);
                 Ok(restored_function.into_value())
             }
             JSJavaProxy::JavaFunction(ctx_ptr, function_ptr) => {
@@ -113,13 +113,12 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 Ok(exception.into_value())
             }
             JSJavaProxy::NativeArray(pointer) => {
-                let persistent_array = unsafe { Box::from_raw(pointer as *mut Persistent<Array>) };
+                let persistent_array = unsafe { &*(pointer as *mut Persistent<Array>) };
                 let array = persistent_array.clone().restore(&ctx)?;
                 Ok(array.into_value())
             }
             JSJavaProxy::NativeObject(pointer) => {
-                let persistent_object =
-                    unsafe { Box::from_raw(pointer as *mut Persistent<Object>) };
+                let persistent_object = unsafe { &*(pointer as *mut Persistent<Object>) };
                 let object = persistent_object.clone().restore(&ctx)?;
                 Ok(object.into_value())
             }

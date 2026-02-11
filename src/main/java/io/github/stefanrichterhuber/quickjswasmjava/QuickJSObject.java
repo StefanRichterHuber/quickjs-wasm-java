@@ -1,6 +1,5 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
-import java.io.IOException;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.HashSet;
@@ -122,14 +121,10 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
 
     @Override
     public boolean containsKey(Object key) {
-        try {
-            final MemoryLocation keyLocation = this.ctx.writeToMemory(key);
-
+        try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
             long[] result = this.containsKey.apply(this.getContextPointer(), this.getObjectPointer(),
                     keyLocation.pointer(), keyLocation.length());
             return result[0] != 0;
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
     }
 
@@ -154,20 +149,19 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         if (key == null) {
             throw new NullPointerException("Key must not be null");
         }
-        final MemoryLocation keyLocation = this.ctx.writeToMemory(key);
+        try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
 
-        final long[] result = this.getValue.apply(this.getContextPointer(), this.getObjectPointer(),
-                keyLocation.pointer(), keyLocation.length());
+            final long[] result = this.getValue.apply(this.getContextPointer(), this.getObjectPointer(),
+                    keyLocation.pointer(), keyLocation.length());
 
-        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], this.ctx.getRuntime())) {
-            final Object r = this.ctx.unpackObjectFromMemory(resultLocation);
-            if (r instanceof RuntimeException) {
-                throw (RuntimeException) r;
-            } else {
-                return (V) r;
+            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], this.ctx.getRuntime())) {
+                final Object r = this.ctx.unpackObjectFromMemory(resultLocation);
+                if (r instanceof RuntimeException) {
+                    throw (RuntimeException) r;
+                } else {
+                    return (V) r;
+                }
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to unpack result from native library", e);
         }
 
     }
@@ -193,8 +187,6 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
                     throw new RuntimeException("Result is not a collection");
                 }
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to unpack result from native library", e);
         }
     }
 
@@ -206,15 +198,12 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
 
         final V oldValue = get(key);
 
-        try {
-            final MemoryLocation keyLocation = this.ctx.writeToMemory(key);
-            final MemoryLocation valueLocation = this.ctx.writeToMemory(value);
+        try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key);
+                final MemoryLocation valueLocation = this.ctx.writeToMemory(value)) {
 
             this.setValue.apply(this.getContextPointer(), this.getObjectPointer(), keyLocation.pointer(),
                     keyLocation.length(), valueLocation.pointer(), valueLocation.length());
 
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
         return oldValue;
     }
@@ -223,12 +212,9 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
     public V remove(Object key) {
         final V value = get(key);
 
-        try {
-            final MemoryLocation keyLocation = this.ctx.writeToMemory(key);
+        try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
             this.removeValue.apply(this.getContextPointer(), this.getObjectPointer(), keyLocation.pointer(),
                     keyLocation.length());
-        } catch (Exception e) {
-            throw new RuntimeException(e);
         }
         return value;
     }

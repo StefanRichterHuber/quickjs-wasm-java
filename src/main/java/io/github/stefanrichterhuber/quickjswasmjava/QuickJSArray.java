@@ -1,6 +1,5 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
-import java.io.IOException;
 import java.util.AbstractList;
 
 import org.apache.logging.log4j.LogManager;
@@ -124,8 +123,6 @@ public final class QuickJSArray<T> extends AbstractList<T> {
             } else {
                 return (T) r;
             }
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to unpack result from native library", e);
         }
     }
 
@@ -133,13 +130,13 @@ public final class QuickJSArray<T> extends AbstractList<T> {
     public boolean add(T value) {
         final int len = size();
 
-        final MemoryLocation valueLocation = this.context.writeToMemory(value);
+        try (final MemoryLocation valueLocation = this.context.writeToMemory(value)) {
+            final long[] result = this.set.apply(this.getContextPointer(), this.getArrayPointer(), len,
+                    valueLocation.pointer(),
+                    valueLocation.length());
 
-        final long[] result = this.set.apply(this.getContextPointer(), this.getArrayPointer(), len,
-                valueLocation.pointer(),
-                valueLocation.length());
-
-        return result[0] == 1;
+            return result[0] == 1;
+        }
     }
 
     @Override
@@ -147,10 +144,10 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         if (index < 0 || index > size()) {
             throw new IndexOutOfBoundsException("Invalid index: " + index);
         }
-        final MemoryLocation valueLocation = this.context.writeToMemory(value);
-
-        this.add.apply(this.getContextPointer(), this.getArrayPointer(), index, valueLocation.pointer(),
-                valueLocation.length());
+        try (final MemoryLocation valueLocation = this.context.writeToMemory(value)) {
+            this.add.apply(this.getContextPointer(), this.getArrayPointer(), index, valueLocation.pointer(),
+                    valueLocation.length());
+        }
     }
 
     @Override
@@ -161,10 +158,10 @@ public final class QuickJSArray<T> extends AbstractList<T> {
 
         final T oldValue = get(index);
 
-        final MemoryLocation valueLocation = this.context.writeToMemory(value);
-
-        this.set.apply(this.getContextPointer(), this.getArrayPointer(), index, valueLocation.pointer(),
-                valueLocation.length());
+        try (final MemoryLocation valueLocation = this.context.writeToMemory(value)) {
+            this.set.apply(this.getContextPointer(), this.getArrayPointer(), index, valueLocation.pointer(),
+                    valueLocation.length());
+        }
 
         return oldValue;
     }
