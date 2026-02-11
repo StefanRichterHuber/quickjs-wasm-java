@@ -10,7 +10,7 @@
     <version>1.0.0-SNAPSHOT</version>
 
     <name>quickjs-wasm-java</name>
-    <description>Java wrapper for the QuickJS Javascript engine based on Chicorey and QuickJS compiled to Wasm.</description>
+    <description>Java wrapper for the QuickJS Javascript engine based on Chicorey and rQuickJS compiled to Wasm.</description>
     <url>https://github.com/StefanRichterHuber/quickjs-wasm-java</url>
 
     <licenses>
@@ -215,9 +215,8 @@
                 <version>3.2.0</version>
                 <executions>
 
-                    <!-- Only build for all platforms during release -->
                     <execution>
-                        <id>build linux x86 64 bit</id>
+                        <id>build wasm</id>
                         <goals>
                             <goal>exec</goal>
                         </goals>
@@ -274,7 +273,8 @@
     </build>
 
     <profiles>
-        <!-- Release profile -->
+        <!-- Release profile. Ensures that the wasm file is released optimized and that the final
+        jar is signed -->
         <profile>
             <id>release</id>
             <activation>
