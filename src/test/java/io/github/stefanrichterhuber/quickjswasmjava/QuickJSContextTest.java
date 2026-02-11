@@ -289,16 +289,16 @@ public class QuickJSContextTest {
                 QuickJSContext context = runtime.createContext()) {
 
             Map<String, Object> map = new QuickJSObject<>(context);
-            map.put("a", 1);
-            map.put("b", "Hello");
+            map.put("a", "Hello");
+            map.put("b", "World");
             context.setGlobal("a", map);
             assertEquals(2, map.keySet().size());
 
             Object result = context.eval("a.a");
-            assertEquals(1, result);
+            assertEquals("Hello", result);
 
             result = context.eval("a.b");
-            assertEquals("Hello", result);
+            assertEquals("World", result);
 
             result = context.eval("a.c");
             assertEquals(null, result);
@@ -308,8 +308,8 @@ public class QuickJSContextTest {
             assertEquals("test_value", map.get("c"));
 
             // One can modify a value on JS side, and its visible on Java
-            context.eval("a.a = 10");
-            assertEquals(10, map.get("a"));
+            context.eval("a.a = 'test_value'");
+            assertEquals("test_value", map.get("a"));
 
             // One can remove a value on JS side, and its visible on Java
             context.eval("delete a.b");
