@@ -74,9 +74,13 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
      * copied to the native object!
      * 
      * @param ctx QuickJS context
+     * @param src the Map to copy
      */
     public QuickJSObject(QuickJSContext ctx, final Map<K, V> src) {
         this(ctx, createNativeObject(ctx));
+        if (src == null) {
+            throw new NullPointerException("src must not be null");
+        }
         this.putAll(src);
     }
 

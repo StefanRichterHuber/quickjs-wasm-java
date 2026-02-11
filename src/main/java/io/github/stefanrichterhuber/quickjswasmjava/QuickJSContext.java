@@ -316,6 +316,22 @@ public final class QuickJSContext implements AutoCloseable {
      * 
      * @param name  The name of the global variable.
      * @param value The value of the global variable.
+     * @param <K>   String, numbers or boolean are supported as map keys
+     * @param <V>   Any supported java type, including other lists and maps
+     */
+    public <K, V> void setGlobal(String name, QuickJSObject<K, V> value) {
+        try {
+            setGlobal(name, (Object) value);
+        } catch (IOException e) {
+            throw new RuntimeException("Error setting global variable: " + name, e);
+        }
+    }
+
+    /**
+     * Sets a global variable in the QuickJS context.
+     * 
+     * @param name  The name of the global variable.
+     * @param value The value of the global variable.
      * @param <T>   Any supported java type, including other lists and maps
      */
     public <T> void setGlobal(String name, Map<String, T> value) {

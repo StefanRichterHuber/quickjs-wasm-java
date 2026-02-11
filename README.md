@@ -59,7 +59,7 @@ See test `QuickJSContextTest` for more examples of all capabilities of this scri
 
 ### Supported types
 
-The library seamlessly translates all supported Java types to JS types and vice versa. A JS Functions are exported to Java as QuickJsFunction objects.
+The library seamlessly translates all supported Java types to JS types and vice versa. Most values are copied by value into the JS context, apart from the special objects `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray` and `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject`. These are thin wrappers over native JS arrays / objects. Any change to these object from either JS or java code are directly reflected on the other side. This allows lean interaction with data without huge objects serialized back and forth with each change. Both containers allow every other supported java object as value (including other lists / maps and functions) so deep nested structures are possible!
 
 | Java Type | JS Type | Remark |
 | --- | --- | --- |
@@ -68,10 +68,12 @@ The library seamlessly translates all supported Java types to JS types and vice 
 | `java.lang.Double` / `java.lang.Float` | `number` | QuickJS only supports boxed double values |
 | `java.lang.Integer` | `number` | QuickJS only supports boxed integer values |
 | `java.lang.String` | `string` | |
-| `QuickJSException` | `exception` | JS exceptions are translated to QuickJSException objects. Each exception contains a message and a stack trace (with exact line and column numbers)! Java exceptions thrown in callbacks are transformed into a js exception and returned to Java as QuickJSException objects. The original java stacktrace, is lost, however. |
-| `java.util.List<Object>` | `array` | As of now java lists are copied to JS and vice versa. Values can be any supported type, including mixed types and nested lists/maps |
-| `java.util.Map<String, Object>` | `object` | As of now java maps are copied to JS and vice versa. Values can be any supported type, including mixed types and nested lists/maps. Keys must be strings |
-| `QuickJsFunction` | `function` | native JS functions are exported to Java as QuickJsFunction objects.  |
+| `io.github.stefanrichterhuber.quickjswasmjava.QuickJSException` | `exception` | JS exceptions are translated to QuickJSException objects. Each exception contains a message and a stack trace (with exact line and column numbers)! Java exceptions thrown in callbacks are transformed into a js exception and returned to Java as QuickJSException objects. The original java stacktrace, is lost, however. |
+| `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray<Object>` | `array` | JS arrays are wrapped as QuickJSArray objects. The Values can be any supported type, including mixed types and nested lists/maps. |
+| `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject<String, Object>` | `object` | JS object are wrapped as QuickJSObject objects. Keys can be strings, numbers and boolean.  The Values can be any supported type, including mixed types and nested lists/maps. |
+| `java.util.List<Object>` | `array` | Any java list which is not a `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray` is copied by value into the JS context. If returned to the java context, a `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray` is returned.  The Values can be any supported type, including mixed types and nested lists/maps. |
+| `java.util.Map<String, Object>` | `object` | Any java map which is not a `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject` is copied by value into JS context. The Values can be any supported type, including mixed types and nested lists/maps. Keys can be only strings! If returned to the java context, a `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject` is returned. |
+| `io.github.stefanrichterhuber.quickjswasmjava.QuickJsFunction` | `function` | native JS functions are exported to Java as QuickJsFunction objects.  |
 | `java.util.function.Function<P, R>` | `function` | Java functions can be exported to JS as functions. If the function is transferred back from JS to Java, it is translated to a `java.util.function.Function<List<Object>, Object>` object. |
 | `java.util.function.BiFunction<P, Q, R>` | `function` | Java functions can be exported to JS as functions. If the function is transferred back from JS to Java, it is translated to a `java.util.function.Function<List<Object>, List<Object>, Object>` object. |
 | `java.util.function.Consumer<P>` | `function` | Java functions can be exported to JS as functions. If the function is transferred back from JS to Java, it is translated to a `java.util.function.Function<List<Object>, Object>` object. |
@@ -84,6 +86,9 @@ The library seamlessly translates all supported Java types to JS types and vice 
 
 This library uses log4j2 for logging on the java side and the `log` crate on the Rust side. Log messages from the native library are passed into the JVM and logged using log4j2 with the logger name `io.github.stefanrichterhuber.quickjswasmjava.native.WasmLib`.
 
+## Issues
+
+ - [ ] Pre-compile the wasm library to chicory byte-code at build-time. Currently it is not possible pre-compile the wasm library to byte code due to size restrictions: `using interpreted mode for WASM function index: 2587 (name: JS_CallInternal)`
 
 ## Architecture
 
