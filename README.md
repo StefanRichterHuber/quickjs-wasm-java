@@ -1,3 +1,5 @@
+[![Maven CI](https://github.com/StefanRichterHuber/quickjs-wasm-java/actions/workflows/maven.yml/badge.svg)](https://github.com/StefanRichterHuber/quickjs-wasm-java/actions/workflows/maven.yml)
+
 # QuickJS Java
 
 This is a Java library to use [QuickJS from Fabrice Bellard](https://bellard.org/quickjs/) with Java. It uses a wasm library build with Rust which uses [rquickjs](https://github.com/DelSkayn/rquickjs) to interface QuickJS. To execute the wasm library, it uses [Chicory](https://chicory.dev/) a wasm runtime for Java without native dependencies.
