@@ -2,10 +2,13 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.function.BiFunction;
 
@@ -13,6 +16,11 @@ import org.junit.jupiter.api.Test;
 
 public class QuickJSContextTest {
 
+    /**
+     * All supported java types can be returned from the eval function
+     * 
+     * @throws Exception
+     */
     @Test
     public void testReturnValuesFromEval() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -93,6 +101,12 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * Even functions can be returned form the eval function and will be represented
+     * as QuickJSFunction in java
+     * 
+     * @throws Exception
+     */
     @Test
     public void testReturnFunctionFromEval() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -132,6 +146,11 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * All supported java types can be set as global values in the QuickJS context
+     * 
+     * @throws Exception
+     */
     @Test
     public void testSetGlobal() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -169,6 +188,11 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * All supported java types can be retrieved from the global quickjs context
+     * 
+     * @throws Exception
+     */
     @Test
     public void testGetGlobal() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -206,6 +230,144 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * JS Object will be just wrapped as QuickJSObject. All modifications on the
+     * object will be visible on both the Java and the JS Side
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testNativeObjects() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            context.eval("var a = {a: 1, b: 'Hello'};");
+            Object result = context.getGlobal("a");
+            assertInstanceOf(QuickJSObject.class, result);
+
+            Map<String, Object> obj = (Map<String, Object>) result;
+            assertEquals(2, obj.size());
+            assertEquals(1, obj.get("a"));
+            assertEquals("Hello", obj.get("b"));
+
+            Set<String> keys = obj.keySet();
+            assertEquals(2, keys.size());
+            assertTrue(keys.contains("a"));
+            assertTrue(keys.contains("b"));
+
+            assertNull(obj.get("c"));
+            Object r0 = context.eval("a.c");
+            assertNull(r0);
+
+            // One can add a value on Java side, and its visible on JS
+            obj.put("c", 42);
+            assertEquals(3, obj.size());
+            assertEquals(1, obj.get("a"));
+            assertEquals("Hello", obj.get("b"));
+            assertEquals(42, obj.get("c"));
+            Object r1 = context.eval("a.c");
+            assertEquals(42, r1);
+
+            // One can modify a value on java side and its visible on JS
+            obj.put("a", 10);
+            assertEquals(10, obj.get("a"));
+            Object r2 = context.eval("a.a");
+            assertEquals(10, r2);
+
+            // One can remove a value on java side and its visible on JS
+            obj.remove("b");
+            assertEquals(2, obj.size()); // a and c
+            assertEquals(10, obj.get("a"));
+            Object r3 = context.eval("a.b");
+            assertEquals(null, r3);
+        }
+    }
+
+    @Test
+    public void testNativeObjectFromJavaSide() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            Map<String, Object> map = new QuickJSObject<>(context);
+            map.put("a", 1);
+            map.put("b", "Hello");
+            context.setGlobal("a", map);
+            assertEquals(2, map.keySet().size());
+
+            Object result = context.eval("a.a");
+            assertEquals(1, result);
+
+            result = context.eval("a.b");
+            assertEquals("Hello", result);
+
+            result = context.eval("a.c");
+            assertEquals(null, result);
+
+            // One can add a value on JS side, and its visible on Java
+            context.eval("a.c = 'test_value'");
+            assertEquals("test_value", map.get("c"));
+
+            // One can modify a value on JS side, and its visible on Java
+            context.eval("a.a = 10");
+            assertEquals(10, map.get("a"));
+
+            // One can remove a value on JS side, and its visible on Java
+            context.eval("delete a.b");
+            assertEquals(null, map.get("b"));
+
+        }
+    }
+
+    /**
+     * JS Arrays will be just wrapped as QuickJSArrays. All modifications on the
+     * array
+     * will be visible on both the Java and the JS side.
+     */
+    @Test
+    public void testNativeArrays() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            context.eval("var a = [1, 2, 3];");
+            Object result = context.getGlobal("a");
+            assertInstanceOf(QuickJSArray.class, result);
+            List<Object> array = (List<Object>) result;
+            assertEquals(3, array.size());
+            assertEquals(1, array.get(0));
+            assertEquals(2, array.get(1));
+            assertEquals(3, array.get(2));
+
+            // One can add a value on Java side, and its visible on JS
+            array.add(4);
+            assertEquals(4, array.size());
+            assertEquals(1, array.get(0));
+            assertEquals(2, array.get(1));
+            assertEquals(3, array.get(2));
+            assertEquals(4, array.get(3));
+            Object r1 = context.eval("a[3]");
+            assertEquals(4, r1);
+
+            // One can modify a value on java side and its visible on JS
+            array.set(0, 10);
+            assertEquals(10, array.get(0));
+            Object r2 = context.eval("a[0]");
+            assertEquals(10, r2);
+
+            // One can remove a value on java side and its visible on JS
+            array.remove(0);
+            assertEquals(3, array.size());
+            Object r3 = context.eval("a[0]");
+            assertEquals(2, r3);
+
+        }
+    }
+
+    /**
+     * Several java functions can be put into the quickjs context and called as if
+     * they are native js functions
+     * 
+     * @throws Exception
+     */
     @Test
     public void exportJavaFunctionsToJS() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -221,6 +383,11 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * The runtime of the script can be limited
+     * 
+     * @throws Exception
+     */
     @Test
     public void testScriptRuntimeLimit() throws Exception {
         try (@SuppressWarnings("resource")
@@ -235,6 +402,12 @@ public class QuickJSContextTest {
             }
         }
     }
+
+    /**
+     * JS exceptions thrown in the script are wrapped as QuickJSException
+     * 
+     * @throws Exception
+     */
 
     @Test
     public void testExceptionHandling() throws Exception {
@@ -259,6 +432,13 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * Java exceptions thrown in java callbacks, are wrapped as js exceptions and
+     * then wrapped as QuickJSException. The message remains, the call stack is,
+     * however, replaced with the JS Callstack.
+     * 
+     * @throws Exception
+     */
     @Test
     public void testJavaExceptionHandling() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();

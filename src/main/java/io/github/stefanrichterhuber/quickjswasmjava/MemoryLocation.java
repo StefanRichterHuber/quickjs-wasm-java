@@ -37,8 +37,8 @@ record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) implemen
      * @return The packed memory location.
      */
     long pack() {
-        final int resultPtr = (int) (pointer & 0xffffffff);
-        final int resultLen = (int) (length & 0xffffffff);
+        final int resultPtr = (int) (pointer);
+        final int resultLen = (int) (length);
         return (long) resultLen | ((long) resultPtr << 32);
     }
 }

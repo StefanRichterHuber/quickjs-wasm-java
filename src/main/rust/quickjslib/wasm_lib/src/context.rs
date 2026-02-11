@@ -56,7 +56,7 @@ pub fn eval_script(context: &Context, script: String) -> JSJavaProxy {
     debug!("Evaluating script: {}", script);
     let result = context.with(|ctx| {
         let result: JSJavaProxy = match ctx.eval(script) {
-            Ok(value) => match JSJavaProxy::convert(&value) {
+            Ok(value) => match JSJavaProxy::convert(value) {
                 Ok(value) => value,
                 Err(err) => handle_error(err, ctx),
             },
@@ -92,7 +92,7 @@ pub fn get_global(context: &Context, name: String) -> JSJavaProxy {
     let result = context.with(|ctx| {
         let global = ctx.globals();
         let result: JSJavaProxy = match global.get(name) {
-            Ok(value) => match JSJavaProxy::convert(&value) {
+            Ok(value) => match JSJavaProxy::convert(value) {
                 Ok(value) => value,
                 Err(err) => handle_error(err, ctx),
             },

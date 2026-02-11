@@ -31,8 +31,11 @@ import com.dylibso.chicory.wasm.types.ValType;
  * Represents a QuickJS runtime. This is the main entry point for the QuickJS
  * wasm library.
  */
-public class QuickJSRuntime implements AutoCloseable {
-    public static final boolean DEFAULT_COMPILE = true;
+public final class QuickJSRuntime implements AutoCloseable {
+    /**
+     * Wheter to compile the WASM to bytecode on start
+     */
+    private static final boolean DEFAULT_COMPILE = false;
 
     /**
      * Logger for the QuickJSRuntime class.
@@ -87,7 +90,7 @@ public class QuickJSRuntime implements AutoCloseable {
      * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
      * instantiates it.
      * 
-     * @throws IOException
+     * @throws IOException When reading the wasm library fails
      */
     public QuickJSRuntime() throws IOException {
         this(DEFAULT_COMPILE);
@@ -104,10 +107,11 @@ public class QuickJSRuntime implements AutoCloseable {
      *                than if it was interpreted. You end up paying a small
      *                performance penalty at Instance initialization, but the
      *                execution speedup is usually worth it. If not set, default is
-     *                true. For very short lived runtimes with very small scripts,
+     *                false. For very short lived runtimes with very small scripts,
      *                it might be faster to set this to false.
-     * @throws IOException
-     * @see https://chicory.dev/docs/usage/runtime-compiler
+     * @throws IOException When reading the wasm library fails
+     * @see <a href="https://chicory.dev/docs/usage/runtime-compiler">Runtime
+     *      compiler documentation</a>
      */
     public QuickJSRuntime(boolean compile) throws IOException {
         try (InputStream is = this.getClass()
@@ -363,19 +367,19 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Creates a new context for this runtime.
      * 
-     * @return
+     * @return New QuickJS Context
      */
     public QuickJSContext createContext() {
         QuickJSContext context = new QuickJSContext(this);
         contexts.put(context.getContextPointer(), context);
-        LOGGER.info("Created context with pointer: {}", context.getContextPointer());
+        LOGGER.debug("Created context with pointer: {}", context.getContextPointer());
         return context;
     }
 
     /**
      * Returns the pointer to the runtime in the wasm library
      * 
-     * @return
+     * @return native pointer to the runtime
      */
     long getRuntimePointer() {
         return this.ptr;
@@ -384,7 +388,7 @@ public class QuickJSRuntime implements AutoCloseable {
     /**
      * Returns the instance of the runtime
      * 
-     * @return
+     * @return WASM instance
      */
     Instance getInstance() {
         return this.instance;
@@ -488,7 +492,7 @@ public class QuickJSRuntime implements AutoCloseable {
             closeRuntime.apply(getRuntimePointer());
         } catch (Exception e) {
             // Maybe the runtime was already closed?
-            LOGGER.warn("Error closing runtime", e);
+            LOGGER.debug("Error closing runtime", e);
         }
         ptr = 0;
     }

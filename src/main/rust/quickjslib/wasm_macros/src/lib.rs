@@ -12,7 +12,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut wrapper_args = Vec::new();
     let mut conversions = Vec::new();
     let mut call_args = Vec::new();
-    let mut cleanups = Vec::new();
 
     for arg in &input_fn.sig.inputs {
         if let FnArg::Typed(pat_type) = arg {
@@ -32,20 +31,14 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 call_args.push(quote!(&#arg_name));
 
                 conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Runtime) };
-                });
-                cleanups.push(quote! {
-                    _ = Box::into_raw(#arg_name);
+                    let #arg_name = unsafe { &*(#arg_name as *mut Runtime) };
                 });
             } else if type_str == "& Context" {
                 wrapper_args.push(quote!(#arg_name: u64));
                 call_args.push(quote!(&#arg_name));
 
                 conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Context) };
-                });
-                cleanups.push(quote! {
-                    _ = Box::into_raw(#arg_name);
+                    let #arg_name = unsafe { &*(#arg_name as *mut Context) };
                 });
             } else if type_str == "Box < Context >" {
                 wrapper_args.push(quote!(#arg_name: u64));
@@ -61,17 +54,46 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 conversions.push(quote! {
                     let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Runtime) };
                 });
+            } else if type_str == "Box < Persistent < Function < 'static > > >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(#arg_name));
+
+                conversions.push(quote! {
+                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Function>) };
+                });
+            } else if type_str == "Box < Persistent < Array < 'static > > >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(#arg_name));
+
+                conversions.push(quote! {
+                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Array>) };
+                });
+            } else if type_str == "Box < Persistent < Object < 'static > > >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(#arg_name));
+
+                conversions.push(quote! {
+                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Object>) };
+                });
             } else if type_str == "& Persistent < Function < 'static > >" {
                 wrapper_args.push(quote!(#arg_name: u64));
                 call_args.push(quote!(#arg_name));
-                let box_name = format_ident!("{}_box", arg_name);
                 conversions.push(quote! {
-                    let #box_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Function>) };
-                    let #arg_name = #box_name.as_ref();
+                    let #arg_name = unsafe { &*(#arg_name as *mut Persistent<Function>) };
                 });
-
-                cleanups.push(quote! {
-                     _ = Box::into_raw(#box_name);
+            } else if type_str == "& Persistent < Array < 'static > >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(#arg_name));
+                conversions.push(quote! {
+                    log::debug!("Restored native array from pointer: {}", #arg_name);
+                    let #arg_name = unsafe { &*(#arg_name as *mut Persistent<Array>) };
+                });
+            } else if type_str == "& Persistent < Object < 'static > >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(#arg_name));
+                conversions.push(quote! {
+                    log::debug!("Restored native object from pointer: {}", #arg_name);
+                    let #arg_name = unsafe { &*(#arg_name as *mut Persistent<Object>) };
                 });
             } else {
                 let ptr_name = format_ident!("{}_ptr", arg_name);
@@ -109,7 +131,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
         ReturnType::Default => quote! {
             #[doc = "No return type"]
             let _result = #fn_name(#(#call_args),*);
-            #(#cleanups)*
             0
         },
         ReturnType::Type(_, ty) => {
@@ -117,8 +138,16 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
             if ["i32", "u32", "i64", "u64"].contains(&type_str.as_str()) {
                 quote! {
                     let result = #fn_name(#(#call_args),*);
-                    #(#cleanups)*
                     result as u64
+                }
+            } else if type_str == "bool" {
+                quote! {
+                    let result = #fn_name(#(#call_args),*);
+                    if result {
+                        1
+                    } else {
+                        0
+                    }
                 }
             } else if type_str == "String" {
                 quote! {
@@ -127,7 +156,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let len = bytes.len();
                     let ptr = bytes.as_ptr();
                     std::mem::forget(bytes); // Prevent drop
-                    #(#cleanups)*
                     ((ptr as u64) << 32) | (len as u64)
                 }
             } else if type_str == "Box < Runtime >" {
@@ -135,7 +163,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let result = #fn_name(#(#call_args),*);
                     // return the pointer to the runtime
                     let ptr =  Box::into_raw(result);
-                    #(#cleanups)*
                     ptr as u64
                 }
             } else if type_str == "Box < Context >" {
@@ -143,7 +170,20 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let result = #fn_name(#(#call_args),*);
                     // return the pointer to the runtime
                     let ptr =  Box::into_raw(result);
-                    #(#cleanups)*
+                    ptr as u64
+                }
+            } else if type_str == "Box < Persistent < Object < 'static > > >" {
+                quote! {
+                    let result = #fn_name(#(#call_args),*);
+                    // return the pointer to the runtime
+                    let ptr =  Box::into_raw(result);
+                    ptr as u64
+                }
+            } else if type_str == "Box < Persistent < Array < 'static > > >" {
+                quote! {
+                    let result = #fn_name(#(#call_args),*);
+                    // return the pointer to the runtime
+                    let ptr =  Box::into_raw(result);
                     ptr as u64
                 }
             } else {
@@ -155,7 +195,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let len = bytes.len();
                     let ptr = bytes.as_ptr();
                     std::mem::forget(bytes); // Prevent drop
-                    #(#cleanups)*
                     ((ptr as u64) << 32) | (len as u64)
                 }
             }

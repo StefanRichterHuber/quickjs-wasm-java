@@ -5,6 +5,8 @@ use wasm_macros::wasm_export;
 mod context;
 mod java_log;
 mod js_to_java_proxy;
+mod native_array;
+mod native_object;
 mod quickjs_function;
 mod runtime;
 

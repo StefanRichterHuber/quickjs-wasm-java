@@ -43,13 +43,6 @@ impl log::Log for JavaLog {
     }
 }
 
-/// Imports the log_java function from the Java side.
-///
-/// # Arguments
-///
-/// * `level` - The log level to set
-/// * `message` - The message to log
-/// * `message_len` - The length of the message
 #[link(wasm_import_module = "env")]
 extern "C" {
     pub fn log_java(level: i32, message: *const u8, message_len: usize);

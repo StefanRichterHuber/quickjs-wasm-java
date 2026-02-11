@@ -80,7 +80,7 @@ public final class QuickJSFunction implements Function<Object[], Object> {
     /**
      * Returns the name of the function
      * 
-     * @return
+     * @return name of the function
      */
     public String getName() {
         return name;
@@ -89,7 +89,7 @@ public final class QuickJSFunction implements Function<Object[], Object> {
     /**
      * Returns the pointer to the function in the wasm library
      * 
-     * @return
+     * @return native pointer of the function
      */
     long getFunctionPointer() {
         return functionPtr;

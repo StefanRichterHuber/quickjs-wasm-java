@@ -33,7 +33,7 @@ import com.dylibso.chicory.runtime.Instance;
  * evaluate scripts independently of other contexts. It is recommended to close
  * the context when it is no longer needed to free up resources.
  */
-public class QuickJSContext implements AutoCloseable {
+public final class QuickJSContext implements AutoCloseable {
     private static final Logger LOGGER = LogManager.getLogger();
 
     /**
@@ -138,12 +138,8 @@ public class QuickJSContext implements AutoCloseable {
             MemoryLocation resultLocation = this.writeToMemory(result);
             return new long[] { resultLocation.pack() };
         } catch (RuntimeException e) {
-            try {
-                MemoryLocation resultLocation = this.writeToMemory(e);
-                return new long[] { resultLocation.pack() };
-            } catch (IOException e1) {
-                throw new RuntimeException("Error writing exception to memory", e);
-            }
+            MemoryLocation resultLocation = this.writeToMemory(e);
+            return new long[] { resultLocation.pack() };
         } catch (IOException e) {
             throw new RuntimeException("Error writing result to memory", e);
         }
@@ -157,7 +153,7 @@ public class QuickJSContext implements AutoCloseable {
      * @throws IOException If the script cannot be evaluated.
      */
     public Object eval(String script) throws IOException {
-        byte[] scriptBytes = script.getBytes();
+        byte[] scriptBytes = script.getBytes(StandardCharsets.UTF_8);
         int scriptBytesLen = scriptBytes.length;
 
         long ptr = runtime.alloc(scriptBytesLen);
@@ -169,7 +165,7 @@ public class QuickJSContext implements AutoCloseable {
             // Read the result with messagepack java, it is a pointer and a length to a
             // message pack object
 
-            // Cleanup the memory location after reading the result
+            // TODO: Determine when to cleanup the memory location and when not
             try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
                 final Object r = unpackObjectFromMemory(resultLocation);
                 if (r instanceof RuntimeException) {
@@ -356,7 +352,8 @@ public class QuickJSContext implements AutoCloseable {
     /**
      * Imports a java function as a global function in the QuickJS context.
      * 
-     * @param <P>   The type of the parameter of the function.
+     * @param <P>   The type of the first parameter of the function.
+     * @param <Q>   The type of the second parameter of the function
      * @param <R>   The type of the return value of the function.
      * @param name  The name of the global function.
      * @param value The function to set.
@@ -379,7 +376,7 @@ public class QuickJSContext implements AutoCloseable {
      * @param name  The name of the global function.
      * @param value The function to set.
      */
-    public <P, R> void setGlobal(String name, Consumer<P> value) {
+    public <P> void setGlobal(String name, Consumer<P> value) {
         final Function<List<Object>, Object> function = (args) -> {
             value.accept((P) args.get(0));
             return null;
@@ -394,7 +391,8 @@ public class QuickJSContext implements AutoCloseable {
     /**
      * Imports a java function as a global function in the QuickJS context.
      * 
-     * @param <P>   The type of the parameter of the function.
+     * @param <P>   The type of the first parameter of the function.
+     * @param <Q>   The type of the second parameter of the function.
      * @param name  The name of the global function.
      * @param value The function to set.
      */
@@ -435,13 +433,17 @@ public class QuickJSContext implements AutoCloseable {
      * @return The memory location of the object.
      * @throws IOException If the object cannot be written to the memory.
      */
-    MemoryLocation writeToMemory(Object data) throws IOException {
-        final ByteArrayOutputStream out = new ByteArrayOutputStream();
-        final MessagePacker packer = MessagePack.newDefaultPacker(out);
-        packObject(data, packer);
-        packer.close();
-        final byte[] valueBytes = out.toByteArray();
-        return this.getRuntime().writeToMemory(valueBytes);
+    MemoryLocation writeToMemory(Object data) {
+        try {
+            final ByteArrayOutputStream out = new ByteArrayOutputStream();
+            final MessagePacker packer = MessagePack.newDefaultPacker(out);
+            packObject(data, packer);
+            packer.close();
+            final byte[] valueBytes = out.toByteArray();
+            return this.getRuntime().writeToMemory(valueBytes);
+        } catch (IOException e) {
+            throw new RuntimeException("Unable to write object to memory", e);
+        }
     }
 
     /**
@@ -493,6 +495,10 @@ public class QuickJSContext implements AutoCloseable {
             packer.packMapHeader(1);
             packer.packString("string");
             packer.packString((String) obj);
+        } else if (obj instanceof QuickJSArray) {
+            packer.packMapHeader(1);
+            packer.packString("nativeArray");
+            packer.packLong(((QuickJSArray<?>) obj).getArrayPointer());
         } else if (obj instanceof List) {
             packer.packMapHeader(1);
             packer.packString("array");
@@ -500,6 +506,10 @@ public class QuickJSContext implements AutoCloseable {
             for (Object item : (List<?>) obj) {
                 packObject(item, packer);
             }
+        } else if (obj instanceof QuickJSObject) {
+            packer.packMapHeader(1);
+            packer.packString("nativeObject");
+            packer.packLong(((QuickJSObject<?, ?>) obj).getObjectPointer());
         } else if (obj instanceof Map) {
             packer.packMapHeader(1);
             packer.packString("object");
@@ -647,6 +657,14 @@ public class QuickJSContext implements AutoCloseable {
                     String stack = unpacker.unpackString();
                     return new QuickJSException(message, stack);
                 }
+                case "nativeArray": {
+                    long pointer = unpacker.unpackLong();
+                    return new QuickJSArray<>(this, pointer);
+                }
+                case "nativeObject": {
+                    long pointer = unpacker.unpackLong();
+                    return new QuickJSObject<>(this, pointer);
+                }
                 default:
                     throw new RuntimeException("Unknown type: " + type);
             }
@@ -680,7 +698,7 @@ public class QuickJSContext implements AutoCloseable {
             closeContext.apply(contextPtr);
         } catch (Exception e) {
             // Closing the context might fail after a runtime limit was reached
-            LOGGER.error("Error closing QuickJS context", e);
+            LOGGER.debug("Error closing QuickJS context", e);
         }
         contextPtr = 0;
     }

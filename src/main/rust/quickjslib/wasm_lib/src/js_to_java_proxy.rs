@@ -4,11 +4,14 @@ use rquickjs::function::Args;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::function::ParamRequirement;
 use rquickjs::prelude::IntoArgs;
+use rquickjs::Array;
 use rquickjs::Atom;
 use rquickjs::FromAtom;
 use rquickjs::FromJs;
 use rquickjs::Function;
+use rquickjs::IntoAtom;
 use rquickjs::IntoJs;
+use rquickjs::Object;
 use rquickjs::Persistent;
 use rquickjs::Value;
 use serde::Deserialize;
@@ -28,7 +31,9 @@ pub enum JSJavaProxy {
     Float(f64),
     Boolean(bool),
     Array(Vec<JSJavaProxy>),
+    NativeArray(u64),
     Object(HashMap<String, JSJavaProxy>),
+    NativeObject(u64),
     // Name, function pointer
     Function(String, u64),
     // context, function_ptr
@@ -39,13 +44,25 @@ pub enum JSJavaProxy {
 
 impl<'js> FromJs<'js> for JSJavaProxy {
     fn from_js(_ctx: &rquickjs::Ctx<'js>, value: Value<'js>) -> rquickjs::Result<Self> {
-        JSJavaProxy::convert(&value)
+        JSJavaProxy::convert(value)
     }
 }
 
 impl<'js> FromAtom<'js> for JSJavaProxy {
     fn from_atom(atom: Atom<'js>) -> rquickjs::Result<Self> {
-        JSJavaProxy::convert(&atom.to_value()?)
+        JSJavaProxy::convert(atom.to_value()?)
+    }
+}
+
+impl<'js> IntoAtom<'js> for JSJavaProxy {
+    fn into_atom(self, ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<Atom<'js>> {
+        match self {
+            JSJavaProxy::String(value) => Atom::from_str(ctx.clone(), value.as_str()),
+            JSJavaProxy::Int(value) => Atom::from_i32(ctx.clone(), value),
+            JSJavaProxy::Float(value) => Atom::from_f64(ctx.clone(), value),
+            JSJavaProxy::Boolean(value) => Atom::from_bool(ctx.clone(), value),
+            _ => Err(rquickjs::Error::Exception),
+        }
     }
 }
 
@@ -95,6 +112,17 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 let exception = rquickjs::Exception::from_message(ctx.clone(), &msg)?;
                 Ok(exception.into_value())
             }
+            JSJavaProxy::NativeArray(pointer) => {
+                let persistent_array = unsafe { Box::from_raw(pointer as *mut Persistent<Array>) };
+                let array = persistent_array.clone().restore(&ctx)?;
+                Ok(array.into_value())
+            }
+            JSJavaProxy::NativeObject(pointer) => {
+                let persistent_object =
+                    unsafe { Box::from_raw(pointer as *mut Persistent<Object>) };
+                let object = persistent_object.clone().restore(&ctx)?;
+                Ok(object.into_value())
+            }
         };
         result
     }
@@ -127,24 +155,25 @@ impl<'js> IntoArgs<'js> for JSJavaProxy {
 }
 
 impl JSJavaProxy {
-    pub fn convert<'js>(value: &Value<'js>) -> rquickjs::Result<JSJavaProxy> {
+    pub fn convert<'js>(value: Value<'js>) -> rquickjs::Result<JSJavaProxy> {
         if value.is_null() {
             return Ok(JSJavaProxy::Null);
         } else if value.is_undefined() {
             return Ok(JSJavaProxy::Undefined);
         } else if value.is_function() {
-            let function = value.as_function().unwrap();
+            let function = value.into_function().unwrap();
+            let ctx = function.ctx().clone();
 
             let name: String = function.get("name")?;
 
-            let persistent_function = Persistent::save(function.ctx(), function.clone());
+            let persistent_function = Persistent::save(&ctx, function);
             let persistent_function_ptr = Box::into_raw(Box::new(persistent_function)) as u64;
 
             debug!("Exported function: {} -> {}", name, persistent_function_ptr);
             return Ok(JSJavaProxy::Function(name, persistent_function_ptr));
         } else if value.is_string() {
-            let string = value.as_string().unwrap();
-            return Ok(JSJavaProxy::String(string.to_string().unwrap()));
+            let string = value.into_string().unwrap();
+            return Ok(JSJavaProxy::String(string.to_string()?));
         } else if value.is_int() {
             let number = value.as_int().unwrap();
             return Ok(JSJavaProxy::Int(number));
@@ -156,7 +185,7 @@ impl JSJavaProxy {
             return Ok(JSJavaProxy::Boolean(boolean));
         } else if value.is_exception() {
             debug!("Converting js exception to java exception");
-            let exception = value.as_exception().unwrap();
+            let exception = value.into_exception().unwrap();
             let message = exception
                 .message()
                 .unwrap_or("<No exception message>".to_string());
@@ -164,33 +193,50 @@ impl JSJavaProxy {
             return Ok(JSJavaProxy::Exception(message, stacktrace));
         } else if value.is_array() {
             debug!("Converting js array to java array");
-            // TODO create reference to array instead of copying
-            let array = value.as_array().unwrap();
-            let mut vec = Vec::new();
-            for i in 0..array.len() {
-                vec.push(JSJavaProxy::convert(&array.get(i)?)?);
-            }
-            return Ok(JSJavaProxy::Array(vec));
+            // create reference to array instead of copying by values
+            let array = value.into_array().unwrap();
+            let ctx = array.ctx().clone();
+
+            let persistent_array = Persistent::save(&ctx, array);
+            let persistent_array_ptr = Box::into_raw(Box::new(persistent_array)) as u64;
+            debug!("Created pointer to native array: {}", persistent_array_ptr);
+            return Ok(JSJavaProxy::NativeArray(persistent_array_ptr));
+
+            // let mut vec = Vec::new();
+            // for i in 0..array.len() {
+            //     vec.push(JSJavaProxy::convert(&array.get(i)?)?);
+            // }
+            // return Ok(JSJavaProxy::Array(vec));
         } else if value.is_object() {
             debug!("Converting js object to java map");
             // TODO create reference to object instead of copying
-            let object = value.as_object().unwrap();
-            let mut map = HashMap::new();
+            let object = value.into_object().unwrap();
+            let ctx = object.ctx().clone();
 
-            for key in object.keys().into_iter() {
-                let key_value: JSJavaProxy = key?;
-                let key_string = match key_value {
-                    JSJavaProxy::String(s) => s,
-                    _ => panic!("Key is not a string"),
-                };
+            let persistent_object = Persistent::save(&ctx, object);
+            let persistent_object_ptr = Box::into_raw(Box::new(persistent_object)) as u64;
+            debug!(
+                "Created pointer to native object: {}",
+                persistent_object_ptr
+            );
+            return Ok(JSJavaProxy::NativeObject(persistent_object_ptr));
 
-                map.insert(
-                    key_string.clone(),
-                    JSJavaProxy::convert(&object.get(key_string)?)?,
-                );
-            }
+            // let mut map = HashMap::new();
 
-            return Ok(JSJavaProxy::Object(map));
+            // for key in object.keys().into_iter() {
+            //     let key_value: JSJavaProxy = key?;
+            //     let key_string = match key_value {
+            //         JSJavaProxy::String(s) => s,
+            //         _ => panic!("Key is not a string"),
+            //     };
+
+            //     map.insert(
+            //         key_string.clone(),
+            //         JSJavaProxy::convert(object.get(key_string)?)?,
+            //     );
+            // }
+
+            // return Ok(JSJavaProxy::Object(map));
         }
 
         error!(
@@ -265,7 +311,7 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
         for i in 0..params.len() {
             let value = params.arg(i);
             if let Some(v) = value {
-                args.push(JSJavaProxy::convert(&v)?);
+                args.push(JSJavaProxy::convert(v)?);
             }
         }
 
