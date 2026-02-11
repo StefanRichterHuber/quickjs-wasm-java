@@ -714,7 +714,7 @@ public final class QuickJSContext implements AutoCloseable {
             closeContext.apply(contextPtr);
         } catch (Exception e) {
             // Closing the context might fail after a runtime limit was reached
-            LOGGER.debug("Error closing QuickJS context", e);
+            LOGGER.warn("Error closing QuickJS context", e);
         }
         contextPtr = 0;
     }

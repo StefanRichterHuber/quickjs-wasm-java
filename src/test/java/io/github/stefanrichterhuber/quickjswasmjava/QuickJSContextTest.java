@@ -10,7 +10,11 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
+import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiFunction;
+import java.util.function.Consumer;
+import java.util.function.Function;
+import java.util.function.Supplier;
 
 import org.junit.jupiter.api.Test;
 
@@ -325,8 +329,7 @@ public class QuickJSContextTest {
 
     /**
      * JS Arrays will be just wrapped as QuickJSArrays. All modifications on the
-     * array
-     * will be visible on both the Java and the JS side.
+     * array will be visible on both the Java and the JS side.
      */
     @Test
     public void testNativeArrays() throws Exception {
@@ -421,14 +424,40 @@ public class QuickJSContextTest {
                 return a + b;
             };
 
+            Function<Integer, Integer> square = (a) -> {
+                return a * a;
+            };
+
+            Supplier<Integer> random = () -> {
+                return 42;
+            };
+
+            AtomicInteger counter = new AtomicInteger();
+            Consumer<Integer> count = (a) -> {
+                counter.set(a);
+            };
+
             context.setGlobal("add", add);
+            context.setGlobal("square", square);
+            context.setGlobal("random", random);
+            context.setGlobal("count", count);
+
             Object result = context.eval("add(1, 2)");
             assertEquals(3, result);
+
+            result = context.eval("square(2)");
+            assertEquals(4, result);
+
+            result = context.eval("random()");
+            assertEquals(42, result);
+
+            result = context.eval("count(1)");
+            assertEquals(1, counter.get());
         }
     }
 
     /**
-     * The runtime of the script can be limited
+     * The runtime of the script can be limited in the Runtime object
      * 
      * @throws Exception
      */

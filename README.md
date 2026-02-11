@@ -15,7 +15,8 @@ All of these deeply integrate with the Java runtime and allow full access of JS 
 A main goal of this implementation is to provide a very clean, yet efficient and type-safe interface.
 
 There is already another take from me on this topic [quickjs-java](https://github.com/StefanRichterHuber/quickjs-java), which is also a Java Library wrapping QuickJS. It is, however, using a custom rust based JNI library to interface with QuickJS. This means a custom native library has to be build for each platform. One the other hand, due to direct interaction of rust code with java using JNI, no serializing of data between the native libraries and Java runtime is necessary. Java objects are directly created / accessed in the native code and only references to this objectes are transfered between Java and the native library. 
-This approach avoids native libraries by using wasm and [Chicory](https://chicory.dev/) (a wasm runtime for Java without native dependencies). This means zero native dependencies at runtime. On the other hand, this requires a wasm library to be build, which is one one hand less complex than building a native library for each plaform, but still requires Rust and Cargo to be installed for building the wasm library. In webassembly only primitives and memory can be shared, so any complex object must be serialized (with MessagePack), written to the shared memory and than read by the other side and deserialized. This could be a significant performance overhead for more complex objects. 
+
+This library avoids native libraries by using wasm and [Chicory](https://chicory.dev/) (a wasm runtime for Java without native dependencies). This means zero native dependencies at runtime. On the other hand, this requires a wasm library to be build, which is one one hand less complex than building a native library for each plaform, but still requires Rust and Cargo to be installed for building the wasm library. In webassembly only primitives and memory can be shared, so any complex object must be serialized (with MessagePack), written to the shared memory and than read by the other side and deserialized. This could be a significant performance overhead for more complex objects. 
 
 There are, however, other projects binding QuickJS to the JVM, which might be worth looking at:
 
@@ -54,7 +55,7 @@ try (QuickJSRuntime runtime = new QuickJSRuntime();
 }
 ```
 
-See test `QuickJSContextTest` for more examples of all capabilities of this script runtime.
+See all tests in `io.github.stefanrichterhuber.quickjswasmjavaQuickJSContextTest` for more examples of all the proven capabilities of this script runtime.
 
 
 ### Supported types
@@ -80,15 +81,13 @@ The library seamlessly translates all supported Java types to JS types and vice 
 | `java.util.function.BiConsumer<P, Q>` | `function` | Java functions can be exported to JS as functions. If the function is transferred back from JS to Java, it is translated to a `java.util.function.Function<List<Object>, List<Object>>` object. |
 | `java.util.function.Supplier<R>` | `function` | Java functions can be exported to JS as functions. If the function is transferred back from JS to Java, it is translated to a `java.util.function.Function<List<Object>, Object>` object. |
 
-
-
 ### Logging
 
 This library uses log4j2 for logging on the java side and the `log` crate on the Rust side. Log messages from the native library are passed into the JVM and logged using log4j2 with the logger name `io.github.stefanrichterhuber.quickjswasmjava.native.WasmLib`.
 
 ## Issues
 
- - [ ] Pre-compile the wasm library to chicory byte-code at build-time. Currently it is not possible pre-compile the wasm library to byte code due to size restrictions: `using interpreted mode for WASM function index: 2587 (name: JS_CallInternal)`
+ - [ ] Pre-compile the wasm library to chicory byte-code at build-time for best perfomance. Currently it is not possible pre-compile the wasm library to byte code due to size restrictions, because a single quickjs function is too large to become a bytecode function: `using interpreted mode for WASM function index: 2587 (name: JS_CallInternal)`
 
 ## Architecture
 
