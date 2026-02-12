@@ -357,6 +357,13 @@ public class QuickJSContextTest {
             Object r1 = context.eval("a[3]");
             assertEquals(4, r1);
 
+            // Even add inbetween
+            array.add(1, 9);
+            assertEquals(5, array.size());
+            assertEquals(1, array.get(0));
+            assertEquals(9, array.get(1));
+            assertEquals(2, array.get(2));
+
             // One can modify a value on java side and its visible on JS
             array.set(0, 10);
             assertEquals(10, array.get(0));
@@ -365,9 +372,9 @@ public class QuickJSContextTest {
 
             // One can remove a value on java side and its visible on JS
             array.remove(0);
-            assertEquals(3, array.size());
+            assertEquals(4, array.size());
             Object r3 = context.eval("a[0]");
-            assertEquals(2, r3);
+            assertEquals(9, r3);
 
         }
     }
