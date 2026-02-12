@@ -1,7 +1,5 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
-import java.io.IOException;
-import java.io.InputStream;
 import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
@@ -11,18 +9,13 @@ import java.util.concurrent.TimeUnit;
 import org.apache.logging.log4j.Level;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.msgpack.core.MessagePack;
-import org.msgpack.core.MessageUnpacker;
 
-import com.dylibso.chicory.compiler.InterpreterFallback;
-import com.dylibso.chicory.compiler.MachineFactoryCompiler;
 import com.dylibso.chicory.runtime.ExportFunction;
 import com.dylibso.chicory.runtime.HostFunction;
 import com.dylibso.chicory.runtime.Instance;
 import com.dylibso.chicory.runtime.Store;
 import com.dylibso.chicory.wasi.WasiOptions;
 import com.dylibso.chicory.wasi.WasiPreview1;
-import com.dylibso.chicory.wasm.Parser;
 import com.dylibso.chicory.wasm.WasmModule;
 import com.dylibso.chicory.wasm.types.FunctionType;
 import com.dylibso.chicory.wasm.types.ValType;
@@ -32,11 +25,6 @@ import com.dylibso.chicory.wasm.types.ValType;
  * wasm library.
  */
 public final class QuickJSRuntime implements AutoCloseable {
-    /**
-     * Wheter to compile the WASM to bytecode on start
-     */
-    private static final boolean DEFAULT_COMPILE = false;
-
     /**
      * Logger for the QuickJSRuntime class.
      */
@@ -90,87 +78,24 @@ public final class QuickJSRuntime implements AutoCloseable {
      * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
      * instantiates it.
      * 
-     * @throws IOException When reading the wasm library fails
      */
-    public QuickJSRuntime() throws IOException {
-        this(DEFAULT_COMPILE);
-    }
+    public QuickJSRuntime() {
+        final WasiOptions options = WasiOptions.builder().withStdout(System.out).build();
+        final WasiPreview1 wasi = WasiPreview1.builder().withOptions(options).build();
+        final Store store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunctions());
 
-    /**
-     * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
-     * instantiates it.
-     * 
-     * @param compile Whether to compile the wasm library to native code. This
-     *                runtime compiler translates the WASM instructions to Java
-     *                bytecode on-the-fly in-memory. The resulting code is usually
-     *                expected to evaluate (much) faster and consume less memory
-     *                than if it was interpreted. You end up paying a small
-     *                performance penalty at Instance initialization, but the
-     *                execution speedup is usually worth it. If not set, default is
-     *                false. For very short lived runtimes with very small scripts,
-     *                it might be faster to set this to false.
-     * @throws IOException When reading the wasm library fails
-     * @see <a href="https://chicory.dev/docs/usage/runtime-compiler">Runtime
-     *      compiler documentation</a>
-     */
-    public QuickJSRuntime(boolean compile) throws IOException {
-        try (InputStream is = this.getClass()
-                .getResourceAsStream("libs/wasm_lib.wasm")) {
+        final WasmModule module = WasmLib.load();
+        this.instance = Instance.builder(module).withImportValues(store.toImportValues())
+                .withMachineFactory(WasmLib::create).build();
 
-            final WasiOptions options = WasiOptions.builder().withStdout(System.out).build();
-            final WasiPreview1 wasi = WasiPreview1.builder().withOptions(options).build();
-            final Store store = new Store().addFunction(wasi.toHostFunctions()).addFunction(createCallHostFunctions());
+        this.alloc = this.instance.export("alloc");
+        this.dealloc = this.instance.export("dealloc");
+        this.closeRuntime = this.instance.export("close_runtime_wasm");
 
-            final WasmModule module = Parser.parse(is);
-            if (compile) {
-                this.instance = createCompiledInstance(module, store);
-            } else {
-                this.instance = createInterpretedInstance(module, store);
-            }
+        initLogging();
 
-            this.alloc = this.instance.export("alloc");
-            this.dealloc = this.instance.export("dealloc");
-            this.closeRuntime = this.instance.export("close_runtime_wasm");
-
-            initLogging();
-
-            long[] result = this.instance.export("create_runtime_wasm").apply();
-            this.ptr = result[0];
-        }
-    }
-
-    /**
-     * Creates an interpreted instance of the QuickJS wasm library.
-     * 
-     * @param module The wasm module to instantiate.
-     * @param store  The store to use for instantiation.
-     * @return The interpreted instance.
-     */
-    private static Instance createInterpretedInstance(WasmModule module, Store store) {
-        Instance instance = store.instantiate("quickjslib", module);
-        return instance;
-    }
-
-    /**
-     * Creates a compiled instance of the QuickJS wasm library.
-     * 
-     * @param module The wasm module to instantiate.
-     * @param store  The store to use for instantiation.
-     * @return The compiled instance.
-     */
-    private static Instance createCompiledInstance(WasmModule module, Store store) {
-        // Unfortunately one QuickJS func is to big to be compiled to native code, so we
-        // have to use the interpreter fallback
-        // Warning: using interpreted mode for WASM function index: 2587 (name:
-        // JS_CallInternal)
-        Instance instance = Instance.builder(module)
-                .withImportValues(store.toImportValues())
-                .withMachineFactory(MachineFactoryCompiler.builder(module)
-                        .withInterpreterFallback(InterpreterFallback.SILENT)
-                        .compile())
-                .build();
-
-        return instance;
+        long[] result = this.instance.export("create_runtime_wasm").apply();
+        this.ptr = result[0];
     }
 
     /**
