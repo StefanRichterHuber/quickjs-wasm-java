@@ -52,7 +52,7 @@ The project uses Maven and is pre-configured to build the WebAssembly library us
 
 ### Usage
 
-To use the library, add the following Maven dependency to your `pom.xml`. Please note that the library is *not yet* available in Maven Central, so you need to build it first as described above. Replace `[current version]` with the appropriate version number.
+To use the library, add the following Maven dependency to your `pom.xml`. Replace `[current version]` with the appropriate version number.
 
 ```xml
 <dependency>
