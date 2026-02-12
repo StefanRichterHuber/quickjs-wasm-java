@@ -114,12 +114,12 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
             }
             JSJavaProxy::NativeArray(pointer) => {
                 let persistent_array = unsafe { &*(pointer as *mut Persistent<Array>) };
-                let array = persistent_array.clone().restore(&ctx)?;
+                let array = persistent_array.clone().restore(ctx)?;
                 Ok(array.into_value())
             }
             JSJavaProxy::NativeObject(pointer) => {
                 let persistent_object = unsafe { &*(pointer as *mut Persistent<Object>) };
-                let object = persistent_object.clone().restore(&ctx)?;
+                let object = persistent_object.clone().restore(ctx)?;
                 Ok(object.into_value())
             }
         };

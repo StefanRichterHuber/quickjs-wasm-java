@@ -1,6 +1,7 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
@@ -11,6 +12,7 @@ import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
@@ -124,6 +126,13 @@ public class QuickJSContextTest {
                 assertEquals(42, function.call());
                 assertEquals(42, function.call());
                 assertEquals(42, function.call());
+                // QuickJSFunction implements java.util.function.Function<List<Object>, Object>
+                assertEquals(42, function.apply(List.of()));
+
+                // JS Function can be added back to the js context with a different name
+                context.setGlobal("f1", function);
+                Object r2 = context.eval("f1()");
+                assertEquals(42, r2);
             }
 
             // Global function
@@ -142,6 +151,7 @@ public class QuickJSContextTest {
                 Object result = context.eval("function a(b) { return b + 1; };a");
                 assertInstanceOf(QuickJSFunction.class, result);
                 QuickJSFunction function = (QuickJSFunction) result;
+                assertEquals("a", function.getName());
                 assertEquals(42, function.call(41));
                 assertEquals(1, function.call(0));
                 assertEquals(2, function.call(1));
@@ -250,6 +260,10 @@ public class QuickJSContextTest {
             assertInstanceOf(QuickJSObject.class, result);
 
             Map<String, Object> obj = (Map<String, Object>) result;
+            assertFalse(obj.isEmpty());
+            assertTrue(obj.containsValue(1));
+            assertTrue(obj.containsValue("Hello"));
+
             assertTrue(obj.containsKey("a"));
             assertTrue(obj.containsKey("b"));
             assertEquals(2, obj.size());
@@ -446,10 +460,16 @@ public class QuickJSContextTest {
                 counter.set(a);
             };
 
+            AtomicInteger adder = new AtomicInteger();
+            BiConsumer<Integer, Integer> combine = (a, b) -> {
+                adder.set(a + b);
+            };
+
             context.setGlobal("add", add);
             context.setGlobal("square", square);
             context.setGlobal("random", random);
             context.setGlobal("count", count);
+            context.setGlobal("combine", combine);
 
             Object result = context.eval("add(1, 2)");
             assertEquals(3, result);
@@ -462,6 +482,13 @@ public class QuickJSContextTest {
 
             result = context.eval("count(1)");
             assertEquals(1, counter.get());
+
+            result = context.eval("combine(3 , 4)");
+            assertEquals(7, adder.get());
+
+            // If one retrieves any javafunction from js it is returned as QuickJSFUnction
+            Object addBack = context.getGlobal("add");
+            assertInstanceOf(QuickJSFunction.class, addBack);
         }
     }
 

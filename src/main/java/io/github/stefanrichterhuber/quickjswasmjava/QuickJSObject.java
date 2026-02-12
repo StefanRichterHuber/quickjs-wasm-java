@@ -239,4 +239,15 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
     public Collection<V> values() {
         return entrySet().stream().map(Entry::getValue).collect(Collectors.toList());
     }
+
+    @Override
+    public boolean equals(Object other) {
+        // Shortcut test if both objects point to the same native object
+        if (other instanceof QuickJSObject) {
+            if (((QuickJSObject<K, V>) other).getObjectPointer() == getObjectPointer()) {
+                return true;
+            }
+        }
+        return super.equals(other);
+    }
 }
