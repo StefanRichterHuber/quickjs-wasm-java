@@ -25,6 +25,12 @@ pub fn call_function<'js>(
     result
 }
 
+#[wasm_export]
+pub fn close_function(_context: &Context, object: Box<Persistent<Function<'static>>>) -> bool {
+    drop(object);
+    true
+}
+
 #[link(wasm_import_module = "env")]
 extern "C" {
     pub fn call_java_function(

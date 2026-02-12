@@ -32,3 +32,16 @@ jobs:
       run: rustup target add wasm32-wasip1
     - name: Build with Maven
       run: mvn -B package --file pom.xml
+    
+      # 2. Parse the report and comment on the PR
+    - name: JaCoCo Report to PR
+      id: jacoco
+      uses: madrapps/jacoco-report@v1.7.1
+      with:
+        paths: |
+          ${{ github.workspace }}/target/site/jacoco/jacoco.xml
+        token: ${{ secrets.GITHUB_TOKEN }}
+        min-coverage-overall: 50 # Optional: Fail build if coverage is low
+        min-coverage-changed-files: 80 # Optional: Fail if new code is poorly covered
+        title: Code Coverage
+        update-comment: true # Updates the existing comment instead of creating new ones

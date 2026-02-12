@@ -322,10 +322,14 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, R> void setGlobal(String name, Function<P, R> value) {
-        final Function<List<Object>, Object> function = (args) -> {
-            return value.apply((P) args.get(0));
-        };
-        setGlobal(name, (Object) function);
+        if (value instanceof QuickJSFunction) {
+            setGlobal(name, (Object) value);
+        } else {
+            final Function<List<Object>, Object> function = (args) -> {
+                return value.apply((P) args.get(0));
+            };
+            setGlobal(name, (Object) function);
+        }
     }
 
     /**
@@ -481,6 +485,12 @@ public final class QuickJSContext implements AutoCloseable {
                 packer.packString(entry.getKey().toString());
                 packObject(entry.getValue(), packer);
             }
+        } else if (obj instanceof QuickJSFunction) {
+            packer.packMapHeader(1);
+            packer.packString("function");
+            packer.packArrayHeader(2);
+            packer.packString(((QuickJSFunction) obj).getName());
+            packer.packLong(((QuickJSFunction) obj).getFunctionPointer());
         } else if (obj instanceof Function) {
             packer.packMapHeader(1);
             packer.packString("javaFunction");
@@ -488,23 +498,6 @@ public final class QuickJSContext implements AutoCloseable {
             packer.packInt((int) this.getContextPointer());
             packer.packInt((int) hostFunctions.size());
             hostFunctions.add((Function<List<Object>, Object>) obj);
-        } else if (obj instanceof QuickJSFunction) {
-            packer.packMapHeader(1);
-            packer.packString("function");
-            packer.packArrayHeader(2);
-            packer.packString(((QuickJSFunction) obj).getName());
-            packer.packLong(((QuickJSFunction) obj).getFunctionPointer());
-        } else if (obj instanceof Supplier) {
-            // Wrap the supplier as a function that takes no arguments
-            Function<List<Object>, Object> wrapper = (args) -> ((Supplier<Object>) obj).get();
-            packObject(wrapper, packer);
-        } else if (obj instanceof Consumer) {
-            // Wrap the consumer as a function that takes one argument
-            Function<List<Object>, Object> wrapper = (args) -> {
-                ((Consumer<List<Object>>) obj).accept(args);
-                return null;
-            };
-            packObject(wrapper, packer);
         } else if (obj instanceof Exception) {
             packer.packMapHeader(1);
             packer.packString("exception");
@@ -578,6 +571,9 @@ public final class QuickJSContext implements AutoCloseable {
                 case "int":
                     return unpacker.unpackInt();
                 case "array": {
+                    // Deprecated: Impossible to enter, since a nativeArray should always be
+                    // returned
+
                     int arraySize = unpacker.unpackArrayHeader();
                     List<Object> array = new ArrayList<>();
                     for (int i = 0; i < arraySize; i++) {
@@ -586,6 +582,9 @@ public final class QuickJSContext implements AutoCloseable {
                     return array;
                 }
                 case "object":
+                    // Deprecated: Impossible to enter, since a nativeObject should always be
+                    // returned
+
                     int objectSize = unpacker.unpackMapHeader();
                     Map<String, Object> object = new HashMap<>();
                     for (int i = 0; i < objectSize; i++) {
@@ -603,6 +602,9 @@ public final class QuickJSContext implements AutoCloseable {
                     return new QuickJSFunction(this, functionName, functionPtr);
                 }
                 case "javaFunction": {
+                    // Impossible to enter since, one would always get back a 'function', wrapping
+                    // the Java function
+
                     int arraySize = unpacker.unpackArrayHeader();
                     if (arraySize != 2) {
                         throw new RuntimeException("Expected array with 2 element (context ptr, function index)");

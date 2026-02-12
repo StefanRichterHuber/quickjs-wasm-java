@@ -40,9 +40,7 @@ final class QuickJSObjectEntry<K, V> implements Entry<K, V> {
 
     @Override
     public V setValue(V value) {
-        final V oldValue = getValue();
-        parent.put(key, value);
-        return oldValue;
+        return parent.put(key, value);
     }
 
     @Override

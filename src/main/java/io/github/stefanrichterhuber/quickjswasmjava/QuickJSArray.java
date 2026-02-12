@@ -214,4 +214,14 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         return oldValue;
     }
 
+    @Override
+    public boolean equals(Object other) {
+        // Shortcut test if both arrays point to the same native arrays
+        if (other instanceof QuickJSArray) {
+            if (((QuickJSArray<T>) other).getArrayPointer() == getArrayPointer()) {
+                return true;
+            }
+        }
+        return super.equals(other);
+    }
 }

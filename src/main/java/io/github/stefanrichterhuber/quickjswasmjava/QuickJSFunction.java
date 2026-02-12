@@ -9,7 +9,7 @@ import com.dylibso.chicory.runtime.ExportFunction;
 /**
  * Represents a quickjs native function
  */
-public final class QuickJSFunction implements Function<Object[], Object> {
+public final class QuickJSFunction implements Function<List<Object>, Object> {
     /**
      * The context this function belongs to.
      */
@@ -21,11 +21,13 @@ public final class QuickJSFunction implements Function<Object[], Object> {
     /**
      * The pointer to the function in the wasm library.
      */
-    private final long functionPtr;
+    private long functionPtr;
     /**
      * The native call function.
      */
     private final ExportFunction call;
+
+    private final ExportFunction close;
 
     /**
      * Creates a new QuickJSFunction
@@ -39,6 +41,7 @@ public final class QuickJSFunction implements Function<Object[], Object> {
         this.name = name;
         this.functionPtr = functionPtr;
         this.call = context.getRuntime().getInstance().export("call_function_wasm");
+        this.close = context.getRuntime().getInstance().export("close_function_wasm");
         context.addDependendResource(this::close);
     }
 
@@ -49,21 +52,22 @@ public final class QuickJSFunction implements Function<Object[], Object> {
      * @return the result of the function call
      * @throws IOException if an I/O error occurs
      */
-    public Object call(Object... args) throws IOException {
+    public Object call(Object... args) {
         // We create a message pack object from the arguments, with the root of the pack
         // being an array
         final List<Object> params = args == null || args.length == 0 ? List.of() : List.of(args);
 
         // Don't close the memory location here, because it will be used by the wasm
         // function
-        final MemoryLocation memoryLocation = context.writeToMemory(params);
-        final long[] result = call.apply(context.getContextPointer(), functionPtr, memoryLocation.pointer(),
-                memoryLocation.length());
+        try (final MemoryLocation memoryLocation = context.writeToMemory(params)) {
+            final long[] result = call.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
+                    memoryLocation.length());
 
-        // Cleanup the memory location after reading the result
-        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], context.getRuntime())) {
-            final Object r = context.unpackObjectFromMemory(resultLocation);
-            return r;
+            // Cleanup the memory location after reading the result
+            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], context.getRuntime())) {
+                final Object r = context.unpackObjectFromMemory(resultLocation);
+                return r;
+            }
         }
 
     }
@@ -74,7 +78,10 @@ public final class QuickJSFunction implements Function<Object[], Object> {
      * @throws Exception
      */
     private void close() throws Exception {
-        // TODO implement cleanup
+        if (this.functionPtr != 0) {
+            this.close.apply(getContextPointer(), functionPtr);
+            this.functionPtr = 0;
+        }
     }
 
     /**
@@ -95,13 +102,18 @@ public final class QuickJSFunction implements Function<Object[], Object> {
         return functionPtr;
     }
 
+    /**
+     * Returns the native pointer to the quick js context
+     * 
+     * @return native pointer of the context
+     */
+    long getContextPointer() {
+        return context.getContextPointer();
+    }
+
     @Override
-    public Object apply(Object[] arg0) {
-        try {
-            return call(arg0);
-        } catch (IOException e) {
-            throw new RuntimeException(e);
-        }
+    public Object apply(List<Object> arg0) {
+        return call(arg0);
     }
 
     @Override
