@@ -50,7 +50,6 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
      * 
      * @param args the arguments to pass to the function
      * @return the result of the function call
-     * @throws IOException if an I/O error occurs
      */
     public Object call(Object... args) {
         // We create a message pack object from the arguments, with the root of the pack
