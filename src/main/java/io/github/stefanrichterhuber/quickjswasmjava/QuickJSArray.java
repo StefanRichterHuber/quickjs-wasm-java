@@ -32,8 +32,6 @@ public final class QuickJSArray<T> extends AbstractList<T> {
 
     private final ExportFunction set;
 
-    // private final ExportFunction close;
-
     private final ExportFunction remove;
 
     private final ExportFunction get;
@@ -45,8 +43,25 @@ public final class QuickJSArray<T> extends AbstractList<T> {
      * 
      * @param context QuickJS context
      */
-    public QuickJSArray(QuickJSContext context) {
+    public QuickJSArray(final QuickJSContext context) {
         this(context, createNativeArray(context));
+    }
+
+    /**
+     * Creates a new native JS array and copies the content of the iterable into
+     * this array
+     * 
+     * @param context QuickJS context
+     * @param data    Data to copy into this array
+     */
+    public QuickJSArray(final QuickJSContext context, final Iterable<T> data) {
+        this(context);
+        if (data == null) {
+            throw new NullPointerException("data must not be null");
+        }
+        for (T d : data) {
+            this.add(d);
+        }
     }
 
     /**
@@ -55,7 +70,7 @@ public final class QuickJSArray<T> extends AbstractList<T> {
      * @param context  QuickJS context
      * @param arrayPtr Pointer to the native array
      */
-    QuickJSArray(QuickJSContext context, long arrayPtr) {
+    QuickJSArray(final QuickJSContext context, long arrayPtr) {
         LOGGER.debug("Created wrapper for native JS array with pointer {}", arrayPtr);
         this.size = context.getRuntime().getInstance().export("array_size_wasm");
         this.add = context.getRuntime().getInstance().export("array_add_wasm");
@@ -71,12 +86,23 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         this.context.addDependendResource(this::close);
     }
 
+    /**
+     * Creates a native array in the js runtime for the given context
+     * 
+     * @param context QuickJS context
+     * @return native pointer to the js array
+     */
     private static long createNativeArray(QuickJSContext context) {
         ExportFunction create = context.getRuntime().getInstance().export("array_create_wasm");
         long[] result = create.apply(context.getContextPointer());
         return result[0];
     }
 
+    /**
+     * Returns the native pointer to the js array
+     * 
+     * @return native pointer to the js array
+     */
     long getArrayPointer() {
         if (arrayPtr == 0) {
             throw new IllegalStateException("QuickJSArray already closed");
@@ -84,10 +110,20 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         return arrayPtr;
     }
 
+    /**
+     * Returns the native pointer to the js context
+     * 
+     * @return native pointer to the js context
+     */
     private long getContextPointer() {
         return this.context.getContextPointer();
     }
 
+    /**
+     * Closes this native function, after that it is no longer usable!
+     * 
+     * @throws Exception
+     */
     private void close() throws Exception {
         if (arrayPtr == 0) {
             return;

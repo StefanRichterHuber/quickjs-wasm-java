@@ -1,6 +1,10 @@
 [workspace]
+resolver = "2"
 members = [
     "wasm_lib",
     "wasm_macros",
 ]
 
+[profile.release]
+opt-level = 's'
+lto = true

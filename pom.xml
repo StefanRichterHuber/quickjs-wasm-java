@@ -41,6 +41,8 @@
         <cargo.profile.folder>debug</cargo.profile.folder>
         <cargo.target>wasm32-wasip1</cargo.target>
 
+        <chicory.interpreterFallback>WARN</chicory.interpreterFallback>
+
         <!-- Spotbugs fail on error set to false-->
         <spotbugs.failOnError>false</spotbugs.failOnError>
     </properties>
@@ -77,11 +79,6 @@
             <version>${chicory.version}</version>
         </dependency>
         <dependency>
-            <groupId>com.dylibso.chicory</groupId>
-            <artifactId>compiler</artifactId>
-            <version>${chicory.version}</version>
-        </dependency>
-        <dependency>
             <groupId>org.msgpack</groupId>
             <artifactId>msgpack-core</artifactId>
             <version>0.9.11</version>
@@ -107,17 +104,6 @@
 
     <build>
         <plugins>
-            <plugin>
-                <groupId>org.sonatype.central</groupId>
-                <artifactId>central-publishing-maven-plugin</artifactId>
-                <version>0.9.0</version>
-                <extensions>true</extensions>
-                <configuration>
-                    <publishingServerId>central</publishingServerId>
-                    <autoPublish>true</autoPublish>
-                    <waitUntil>published</waitUntil>
-                </configuration>
-            </plugin>
             <plugin>
                 <artifactId>maven-compiler-plugin</artifactId>
                 <version>3.8.1</version>
@@ -154,62 +140,6 @@
             </plugin>
 
             <plugin>
-                <groupId>com.github.spotbugs</groupId>
-                <artifactId>spotbugs-maven-plugin</artifactId>
-                <version>4.9.8.2</version>
-                <executions>
-                    <execution>
-                        <id>check</id>
-                        <phase>test</phase>
-                        <goals>
-                            <goal>check</goal>
-                        </goals>
-                    </execution>
-                </executions>
-                <configuration>
-                    <plugins>
-                        <plugin>
-                            <groupId>com.h3xstream.findsecbugs</groupId>
-                            <artifactId>findsecbugs-plugin</artifactId>
-                            <version>1.14.0</version>
-                        </plugin>
-                    </plugins>
-                </configuration>
-            </plugin>
-
-            <plugin>
-                <artifactId>maven-source-plugin</artifactId>
-                <version>3.3.0</version>
-                <executions>
-                    <execution>
-                        <id>attach-sources</id>
-                        <goals>
-                            <goal>jar-no-fork</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-javadoc-plugin</artifactId>
-                <version>3.6.3</version>
-                <executions>
-                    <execution>
-                        <id>attach-javadocs</id>
-                        <goals>
-                            <goal>jar</goal>
-                        </goals>
-                    </execution>
-                </executions>
-            </plugin>
-            <plugin>
-                <artifactId>maven-release-plugin</artifactId>
-                <version>3.0.1</version>
-                <configuration>
-                    <tagNameFormat>v@{project.version}</tagNameFormat>
-                </configuration>
-            </plugin>
-
-            <plugin>
                 <groupId>org.codehaus.mojo</groupId>
                 <artifactId>exec-maven-plugin</artifactId>
                 <version>3.2.0</version>
@@ -220,7 +150,7 @@
                         <goals>
                             <goal>exec</goal>
                         </goals>
-                        <phase>compile</phase>
+                        <phase>generate-sources</phase>
                         <configuration>
                             <executable>cargo</executable>
                             <workingDirectory>${project.basedir}/src/main/rust/quickjslib/wasm_lib</workingDirectory>
@@ -241,29 +171,50 @@
                 </executions>
             </plugin>
 
+            <!-- Build the byte code from the wasm file at build time for best performance -->
             <plugin>
-                <artifactId>maven-resources-plugin</artifactId>
-                <version>3.3.1</version>
+                <groupId>com.dylibso.chicory</groupId>
+                <artifactId>chicory-compiler-maven-plugin</artifactId>
+                <version>${chicory.version}</version>
                 <executions>
                     <execution>
-                        <id>copy-lib-wasm</id>
-                        <phase>compile</phase>
+                        <id>compiler-gen</id>
+                        <phase>generate-sources</phase>
                         <goals>
-                            <goal>copy-resources</goal>
+                            <goal>compile</goal>
                         </goals>
                         <configuration>
-                            <outputDirectory>
-                                ${project.build.directory}/classes/io/github/stefanrichterhuber/quickjswasmjava/libs/</outputDirectory>
-                            <resources>
-                                <resource>
-                                    <directory>
-                                        ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}</directory>
-                                    <filtering>false</filtering>
-                                    <includes>
-                                        <include>*.wasm</include>
-                                    </includes>
-                                </resource>
-                            </resources>
+                            <!-- For Debug builds, interpreter fall back is necessary, not for
+                            release -->
+                            <interpreterFallback>${chicory.interpreterFallback}</interpreterFallback>
+                            <!-- Translate the Wasm binary into bytecode -->
+                            <wasmFile>
+                                ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.wasm</wasmFile>
+                            <!-- Name of the generated class to be used -->
+                            <name>io.github.stefanrichterhuber.quickjswasmjava.WasmLib</name>
+                        </configuration>
+                    </execution>
+                </executions>
+            </plugin>
+
+            <!-- Add the generated Chicory sources to the build path, necessary for the IDE to
+            recognize them -->
+            <plugin>
+                <groupId>org.codehaus.mojo</groupId>
+                <artifactId>build-helper-maven-plugin</artifactId>
+                <version>3.6.1</version>
+                <executions>
+                    <execution>
+                        <id>addSource</id>
+                        <phase>generate-sources</phase>
+                        <goals>
+                            <goal>add-source</goal>
+                        </goals>
+                        <configuration>
+                            <sources>
+                                <source>
+                                    ${project.build.directory}/generated-sources/chicory-compiler</source>
+                            </sources>
                         </configuration>
                     </execution>
                 </executions>
@@ -284,12 +235,28 @@
                 </property>
             </activation>
             <properties>
+                <!-- Build wasm library with release optimizations-->
                 <cargo.profile>release</cargo.profile>
                 <cargo.profile.folder>release</cargo.profile.folder>
 
+                <!-- Release build is so small it could be perfectly compiled withoug interpreter
+                fallback-->
+                <chicory.interpreterFallback>FAIL</chicory.interpreterFallback>
             </properties>
             <build>
                 <plugins>
+                    <plugin>
+                        <groupId>org.sonatype.central</groupId>
+                        <artifactId>central-publishing-maven-plugin</artifactId>
+                        <version>0.9.0</version>
+                        <extensions>true</extensions>
+                        <configuration>
+                            <publishingServerId>central</publishingServerId>
+                            <autoPublish>true</autoPublish>
+                            <waitUntil>published</waitUntil>
+                        </configuration>
+                    </plugin>
+
                     <plugin>
                         <groupId>org.apache.maven.plugins</groupId>
                         <artifactId>maven-gpg-plugin</artifactId>
@@ -303,6 +270,40 @@
                                 </goals>
                             </execution>
                         </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-source-plugin</artifactId>
+                        <version>3.3.0</version>
+                        <executions>
+                            <execution>
+                                <id>attach-sources</id>
+                                <goals>
+                                    <goal>jar-no-fork</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-javadoc-plugin</artifactId>
+                        <version>3.6.3</version>
+                        <executions>
+                            <execution>
+                                <id>attach-javadocs</id>
+                                <goals>
+                                    <goal>jar</goal>
+                                </goals>
+                            </execution>
+                        </executions>
+                    </plugin>
+
+                    <plugin>
+                        <artifactId>maven-release-plugin</artifactId>
+                        <version>3.0.1</version>
+                        <configuration>
+                            <tagNameFormat>v@{project.version}</tagNameFormat>
+                        </configuration>
                     </plugin>
                 </plugins>
             </build>
