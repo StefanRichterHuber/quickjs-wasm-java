@@ -72,6 +72,37 @@ pub fn eval_script(context: &Context, script: String) -> JSJavaProxy {
     result
 }
 
+///
+/// Invokes a function in the QuickJS context.
+///
+pub fn invoke_function(
+    ctx: &Ctx<'_>,
+    name: String,
+    args: JSJavaProxy,
+) -> rquickjs::Result<JSJavaProxy> {
+    let f: rquickjs::Value = ctx.globals().get(&name)?;
+
+    let result = if f.is_function() {
+        let function = f.as_function().unwrap();
+        let result: JSJavaProxy = function.call(args)?;
+        Ok(result)
+    } else {
+        error!("Function {} is not a function", &name);
+        Err(rquickjs::Error::Exception)
+    };
+    result
+}
+
+#[wasm_export]
+pub fn invoke(context: &Context, name: String, args: JSJavaProxy) -> JSJavaProxy {
+    debug!("Invoking function: {}", name);
+    let result: JSJavaProxy = context.with(|ctx| match invoke_function(&ctx, name, args) {
+        Ok(value) => value,
+        Err(err) => handle_error(err, ctx),
+    });
+    result
+}
+
 #[wasm_export]
 pub fn set_global(context: &Context, name: String, value: JSJavaProxy) -> JSJavaProxy {
     debug!("Setting global: {} = {:?}", name, value);

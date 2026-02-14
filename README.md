@@ -103,12 +103,29 @@ public class QuickJSExample {
 }
 ```
 
-For more comprehensive examples and detailed usage patterns, refer to the unit tests: [`io.github.stefanrichterhuber.quickjswasmjava.QuickJSContextTest`](src/test/java/io/github/stefanrichterhuber/quickjswasmjava/QuickJSContextTest.java).
+For more comprehensive examples and detailed usage patterns, refer to the unit tests: [`io.github.stefanrichterhuber.quickjswasmjava.QuickJSContextTest`](src/test/java/io/github/stefanrichterhuber/quickjswasmjava/QuickJSContextTest.java). The context object ``io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext`` provides a set of methods to interact with the JavaScript runtime. It also implements `javax.script.Invocable`, allowing to invoke JavaScript functions from Java or map them to Java interfaces.
+
+```java
+    public interface TestInterface {
+        int add(int a, int b);
+
+        int substract(int a, int b);
+    }
+    
+     try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            context.eval("function add(a, b) { return a + b; }; function substract(a, b) { return a - b; }; ");
+            TestInterface testInterface = context.getInterface(TestInterface.class);
+            assertEquals(3, testInterface.add(1, 2));
+            assertEquals(1, testInterface.substract(2, 1));
+        }
+```
 
 
 ## Type Mapping
 
-The library handles seamless translation between supported Java and JavaScript types. Most Java values are copied by value into the JavaScript context. However, for efficient interaction with complex data structures, `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray` and `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject` act as thin wrappers over native QuickJS arrays and objects. Changes made to these wrapper objects from either Java or JavaScript are directly reflected on the other side, avoiding costly serialization/deserialization for large structures. Both `QuickJSArray` and `QuickJSObject` can contain any other supported Java object, allowing for deeply nested structures.
+The library handles seamless translation between supported Java and JavaScript types. Most Java values are copied by value into the JavaScript context. However, for efficient interaction with complex data structures, `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray` and `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject` act as thin wrappers over native QuickJS arrays and objects. Changes made to these wrapper objects from either Java or JavaScript are directly reflected on the other side, avoiding costly serialization/deserialization for large structures. Both `QuickJSArray` and `QuickJSObject` can contain any other supported Java object, allowing for deeply nested structures. The object `QuickJSObject` adds a method `getInterface` to map JavaScript functions within the object to Java interfaces and `invokeFunction` to invoke JavaScript in the object functions from Java.
 
 | Java Type | JS Type | Remark |
 | :-------- | :------ | :----- |
@@ -128,6 +145,20 @@ The library handles seamless translation between supported Java and JavaScript t
 | `java.util.function.Consumer<P>` | `function` | Java `Consumer` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `Consumer<P>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (returning `null`). |
 | `java.util.function.BiConsumer<P, Q>` | `function` | Java `BiConsumer` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `BiConsumer<P, Q>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (returning `null`). |
 | `java.util.function.Supplier<R>` | `function` | Java `Supplier` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `Supplier<R>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (with an empty argument `List`). |
+
+## JSR-223
+
+The library implements the [JSR-223](https://jcp.org/en/jsr/detail?id=223) interface, allowing it to be used as a script engine in Java applications.
+
+```java
+    ScriptEngineManager manager = new ScriptEngineManager();
+    ScriptEngine engine = manager.getEngineByName("QuickJS");
+    Bindings bindings = engine.createBindings();
+    bindings.put("a", 10);
+    bindings.put("b", 20);
+    Object result = engine.eval("a + b", bindings);
+    assertEquals(30, result);
+```
 
 ## Technical Details
 

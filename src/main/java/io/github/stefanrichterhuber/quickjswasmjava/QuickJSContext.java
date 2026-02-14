@@ -2,6 +2,7 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.io.ByteArrayOutputStream;
 import java.io.IOException;
+import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
 import java.util.Arrays;
@@ -14,6 +15,9 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 import java.util.stream.Collectors;
+
+import javax.script.Invocable;
+import javax.script.ScriptException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -33,7 +37,7 @@ import com.dylibso.chicory.runtime.Instance;
  * evaluate scripts independently of other contexts. It is recommended to close
  * the context when it is no longer needed to free up resources.
  */
-public final class QuickJSContext implements AutoCloseable {
+public final class QuickJSContext implements AutoCloseable, Invocable {
     private static final Logger LOGGER = LogManager.getLogger();
 
     /**
@@ -72,6 +76,11 @@ public final class QuickJSContext implements AutoCloseable {
     private final ExportFunction getGlobal;
 
     /**
+     * The native invoke function.
+     */
+    private final ExportFunction invoke;
+
+    /**
      * List of resources that are dependent on this context. If this context is
      * closed, all dependent resources will be closed too.
      */
@@ -95,6 +104,7 @@ public final class QuickJSContext implements AutoCloseable {
         this.eval = runtime.getInstance().export("eval_script_wasm");
         this.setGlobal = runtime.getInstance().export("set_global_wasm");
         this.getGlobal = runtime.getInstance().export("get_global_wasm");
+        this.invoke = runtime.getInstance().export("invoke_wasm");
         this.contextPtr = createContext.apply(runtime.getRuntimePointer())[0];
 
     }
@@ -145,22 +155,19 @@ public final class QuickJSContext implements AutoCloseable {
     }
 
     /**
-     * Evaluates a script in the QuickJS context.
+     * Invokes a function in the QuickJS context.
      * 
-     * @param script The script to evaluate.
-     * @return The result of the script.
-     * @throws IOException If the script cannot be evaluated.
+     * @param name The name of the function to invoke.
+     * @param args The arguments to pass to the function.
+     * @return The result of the function.
      */
-    public Object eval(String script) throws IOException {
-        byte[] scriptBytes = script.getBytes(StandardCharsets.UTF_8);
-        int scriptBytesLen = scriptBytes.length;
-
-        long ptr = runtime.alloc(scriptBytesLen);
-        runtime.getInstance().memory().writeString((int) ptr, script, StandardCharsets.UTF_8);
-        LOGGER.debug("Allocated memory for script: {} with length {}", ptr, scriptBytesLen);
-        try {
+    public Object invoke(String name, Object... args) {
+        try (final MemoryLocation nameLocation = this.writeStringToMemory(name);
+                final MemoryLocation argsLocation = this.writeToMemory(List.of(args));) {
             runtime.scriptStarted();
-            long[] result = eval.apply(contextPtr, ptr, scriptBytesLen);
+            final long[] result = invoke.apply(contextPtr, nameLocation.pointer(), nameLocation.length(),
+                    argsLocation.pointer(),
+                    argsLocation.length());
             // Read the result with messagepack java, it is a pointer and a length to a
             // message pack object
 
@@ -174,7 +181,32 @@ public final class QuickJSContext implements AutoCloseable {
                 return r;
             }
         } finally {
-            runtime.dealloc(ptr, scriptBytesLen);
+            runtime.scriptFinished();
+        }
+    }
+
+    /**
+     * Evaluates a script in the QuickJS context.
+     * 
+     * @param script The script to evaluate.
+     * @return The result of the script.
+     * @throws IOException If the script cannot be evaluated.
+     */
+    public Object eval(String script) throws IOException {
+        try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);) {
+            runtime.scriptStarted();
+            long[] result = eval.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
+            // Read the result with messagepack java, it is a pointer and a length to a
+            // message pack object
+            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
+                final Object r = unpackObjectFromMemory(resultLocation);
+                if (r instanceof RuntimeException) {
+                    throw (RuntimeException) r;
+                }
+
+                return r;
+            }
+        } finally {
             runtime.scriptFinished();
         }
     }
@@ -185,7 +217,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param name  The name of the global variable.
      * @param value The value of the global variable.
      */
-    private void setGlobal(String name, Object value) {
+    public void setGlobal(String name, Object value) {
 
         LOGGER.debug("Setting global: {} = {}", name, value);
 
@@ -399,6 +431,59 @@ public final class QuickJSContext implements AutoCloseable {
     }
 
     /**
+     * Retrieves an interface from the QuickJS context. This way js functions
+     * can be called as if they were java functions.
+     * 
+     * @param <T>   The type of the interface.
+     * @param clasz The class of the interface.
+     * @return The interface.
+     */
+    @Override
+    public <T> T getInterface(Class<T> clasz) {
+        return (T) Proxy.newProxyInstance(clasz.getClassLoader(), new Class[] { clasz },
+                new ScriptInvocationHandler<>(this, null));
+    }
+
+    /**
+     * Retrieves an interface from an object in the QuickJS context. This way js
+     * functions can be called as if they were java functions.
+     * 
+     * @param <T>   The type of the interface.
+     * @param clasz The class of the interface.
+     * @return The interface.
+     */
+    public <T> T getInterface(QuickJSObject<?, ?> thiz, Class<T> clasz) {
+        return thiz.getInterface(clasz);
+    }
+
+    @Override
+    public <T> T getInterface(Object thiz, Class<T> clasz) {
+        if (thiz instanceof QuickJSObject)
+            return getInterface((QuickJSObject<?, ?>) thiz, clasz);
+        throw new IllegalArgumentException("Object is not a QuickJSObject");
+    }
+
+    @Override
+    public Object invokeMethod(Object thiz, String name, Object... args) throws ScriptException, NoSuchMethodException {
+        if (name == null)
+            throw new IllegalArgumentException("Method name cannot be null");
+
+        if (thiz instanceof QuickJSObject)
+            return ((QuickJSObject<?, ?>) thiz).invokeFunction(name, args);
+        throw new IllegalArgumentException("Object " + thiz + " is not a QuickJSObject");
+    }
+
+    @Override
+    public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
+        if (name == null)
+            throw new IllegalArgumentException("Function name cannot be null");
+        Object g = getGlobal(name);
+        if (g instanceof QuickJSFunction)
+            return ((QuickJSFunction) g).call(args);
+        throw new NoSuchMethodException("No such function: " + name + " in global scope");
+    }
+
+    /**
      * Writes an object to the memory of the QuickJS runtime.
      * 
      * @param data The object to write to the memory.
@@ -416,6 +501,23 @@ public final class QuickJSContext implements AutoCloseable {
         } catch (IOException e) {
             throw new RuntimeException("Unable to write object to memory", e);
         }
+    }
+
+    /**
+     * Writes an raw string (without packing it to a message pack) to the memory of
+     * the QuickJS runtime.
+     * 
+     * @param value The string to write to the memory.
+     * @return The memory location of the string.
+     */
+    MemoryLocation writeStringToMemory(String value) {
+        final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
+        final int valueBytesLen = valueBytes.length;
+
+        final long valuePtr = runtime.alloc(valueBytesLen);
+        runtime.getInstance().memory().writeString((int) valuePtr, value, StandardCharsets.UTF_8);
+
+        return new MemoryLocation(valuePtr, valueBytesLen, runtime);
     }
 
     /**
