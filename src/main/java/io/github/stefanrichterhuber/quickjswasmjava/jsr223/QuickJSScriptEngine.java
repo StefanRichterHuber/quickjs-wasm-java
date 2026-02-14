@@ -1,14 +1,13 @@
 package io.github.stefanrichterhuber.quickjswasmjava.jsr223;
 
 import java.io.IOException;
-import java.io.OutputStream;
 import java.io.Reader;
+import java.io.StringWriter;
 
 import javax.script.AbstractScriptEngine;
 import javax.script.Bindings;
 import javax.script.Invocable;
 import javax.script.ScriptContext;
-import javax.script.ScriptEngine;
 import javax.script.ScriptEngineFactory;
 import javax.script.ScriptException;
 import javax.script.SimpleBindings;
@@ -18,7 +17,7 @@ import io.github.stefanrichterhuber.quickjswasmjava.QuickJSFunction;
 import io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject;
 import io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime;
 
-public class QuickJSScriptEngine extends AbstractScriptEngine implements ScriptEngine, Invocable, AutoCloseable {
+public class QuickJSScriptEngine extends AbstractScriptEngine implements Invocable, AutoCloseable {
 
     private final QuickJSScriptEngineFactory factory;
     private final QuickJSRuntime runtime;
@@ -69,17 +68,14 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements ScriptE
 
     @Override
     public Object eval(Reader reader, ScriptContext context) throws ScriptException {
-        StringBuilder sb = new StringBuilder();
-        char[] arr = new char[8192];
-        int numChars;
+        final StringWriter sw = new StringWriter();
         try {
-            while ((numChars = reader.read(arr, 0, arr.length)) > 0) {
-                sb.append(arr, 0, numChars);
-            }
+            reader.transferTo(sw);
         } catch (IOException e) {
             throw new ScriptException(e);
         }
-        return eval(sb.toString(), context);
+        final String script = sw.toString();
+        return eval(script, context);
     }
 
     @Override
@@ -117,7 +113,7 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements ScriptE
 
     @Override
     public <T> T getInterface(Class<T> clasz) {
-        return null; // TODO: Implement if needed
+        return this.context.getInterface(clasz);
     }
 
     @Override
@@ -125,9 +121,8 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements ScriptE
         if (!(thiz instanceof QuickJSObject)) {
             throw new IllegalArgumentException("Target object must be a QuickJSObject");
         }
-        @SuppressWarnings("unchecked")
-        QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) thiz;
-        return obj.getInterface(clasz);
+        final QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) thiz;
+        return this.context.getInterface(obj, clasz);
     }
 
     /**

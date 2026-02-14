@@ -3,6 +3,7 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
@@ -574,6 +575,66 @@ public class QuickJSContextTest {
             QuickJSException quickJSException = (QuickJSException) e;
             assertEquals("test", quickJSException.getRawMessage());
             System.out.println(e.getMessage());
+        }
+    }
+
+    /**
+     * Invoking a JS function directly from java is possible
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void testInvokeJSFunction() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            context.eval("function a(x, y) { return x + y; };");
+            Object result = context.invoke("a", 1, 2);
+            assertEquals(3, result);
+        }
+    }
+
+    public interface TestInterface {
+        int add(int a, int b);
+
+        int substract(int a, int b);
+    }
+
+    /**
+     * The global js context can be used as if it implements a java interface
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void mapJSContextToJavaInterface() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            context.eval("function add(a, b) { return a + b; }; function substract(a, b) { return a - b; }; ");
+            TestInterface testInterface = context.getInterface(TestInterface.class);
+            assertEquals(3, testInterface.add(1, 2));
+            assertEquals(1, testInterface.substract(2, 1));
+        }
+    }
+
+    /**
+     * JS objects can be retrieved from the QuickJS context and mapped to java
+     * interfaces. This way the JS object can be used as if it implements a java
+     * interface.
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void mapJSObjectToJavaInterface() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) context.eval(
+                    "let obj = {add: function(a, b) { return a + b; }, substract: function(a, b) { return a - b; }}; obj");
+            assertNotNull(obj);
+            TestInterface testInterface = context.getInterface(obj, TestInterface.class);
+            assertEquals(3, testInterface.add(1, 2));
+            assertEquals(1, testInterface.substract(2, 1));
         }
     }
 }

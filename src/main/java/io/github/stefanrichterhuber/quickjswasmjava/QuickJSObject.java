@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
+import java.lang.reflect.Proxy;
 import java.util.AbstractMap;
 import java.util.Collection;
 import java.util.HashSet;
@@ -252,5 +253,36 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
             }
         }
         return super.equals(other);
+    }
+
+    /**
+     * Returns an interface to the object. This is a dynamic proxy that implements
+     * the given interface and forwards all method calls to the object. This way
+     * you can call methods on the object as if it implements the interface.
+     * 
+     * @param <T>   The type of the interface.
+     * @param clasz The interface to implement.
+     * @return The interface.
+     */
+    public <T> T getInterface(Class<T> clasz) {
+        return (T) Proxy.newProxyInstance(clasz.getClassLoader(), new Class[] { clasz },
+                new ScriptInvocationHandler<K, V>(this.ctx, this));
+    }
+
+    /**
+     * Invokes a function on the object.
+     * 
+     * @param name The name of the function.
+     * @param args The arguments to pass to the function.
+     * @return The result of the function.
+     * @throws NoSuchMethodException If the function does not exist.
+     */
+    public Object invokeFunction(String name, Object... args) throws NoSuchMethodException {
+        Object f = get(name);
+        if (f instanceof QuickJSFunction) {
+            return ((QuickJSFunction) f).call(args);
+        } else {
+            throw new NoSuchMethodException("Method " + name + " not found in object " + this);
+        }
     }
 }
