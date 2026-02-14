@@ -69,6 +69,7 @@ public class QuickJSContextTest {
             {
                 Object result = context.eval("[ 3.14, 42, 'hello', true, [1,2,3]]");
                 assertInstanceOf(List.class, result);
+                @SuppressWarnings("unchecked")
                 List<Object> list = (List<Object>) result;
                 assertEquals(5, list.size());
                 assertEquals(3.14, list.get(0));
@@ -76,6 +77,7 @@ public class QuickJSContextTest {
                 assertEquals("hello", list.get(2));
                 assertEquals(true, list.get(3));
                 assertInstanceOf(List.class, list.get(4));
+                @SuppressWarnings("unchecked")
                 List<Object> nestedList = (List<Object>) list.get(4);
                 assertEquals(3, nestedList.size());
                 assertEquals(1, nestedList.get(0));
@@ -87,6 +89,7 @@ public class QuickJSContextTest {
                 Object result = context
                         .eval("let r = { a: 3.14, b: 42, c: 'hello', d: true, e: [1,2,3], f: {g: 42}}; r");
                 assertInstanceOf(Map.class, result);
+                @SuppressWarnings("unchecked")
                 Map<String, Object> map = (Map<String, Object>) result;
                 assertEquals(6, map.size());
                 assertEquals(3.14, map.get("a"));
@@ -94,12 +97,14 @@ public class QuickJSContextTest {
                 assertEquals("hello", map.get("c"));
                 assertEquals(true, map.get("d"));
                 assertInstanceOf(List.class, map.get("e"));
+                @SuppressWarnings("unchecked")
                 List<Object> nestedList = (List<Object>) map.get("e");
                 assertEquals(3, nestedList.size());
                 assertEquals(1, nestedList.get(0));
                 assertEquals(2, nestedList.get(1));
                 assertEquals(3, nestedList.get(2));
                 assertInstanceOf(Map.class, map.get("f"));
+                @SuppressWarnings("unchecked")
                 Map<String, Object> nestedMap = (Map<String, Object>) map.get("f");
                 assertEquals(1, nestedMap.size());
                 assertEquals(42, nestedMap.get("g"));
@@ -259,6 +264,7 @@ public class QuickJSContextTest {
             Object result = context.getGlobal("a");
             assertInstanceOf(QuickJSObject.class, result);
 
+            @SuppressWarnings("unchecked")
             Map<String, Object> obj = (Map<String, Object>) result;
             assertFalse(obj.isEmpty());
             assertTrue(obj.containsValue(1));
@@ -355,6 +361,7 @@ public class QuickJSContextTest {
             context.eval("var a = [1, 2, 3];");
             Object result = context.getGlobal("a");
             assertInstanceOf(QuickJSArray.class, result);
+            @SuppressWarnings("unchecked")
             List<Object> array = (List<Object>) result;
             assertEquals(3, array.size());
             assertEquals(1, array.get(0));

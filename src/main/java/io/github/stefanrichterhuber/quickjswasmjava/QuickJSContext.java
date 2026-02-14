@@ -185,7 +185,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param name  The name of the global variable.
      * @param value The value of the global variable.
      */
-    private void setGlobal(String name, Object value) {
+    public void setGlobal(String name, Object value) {
 
         LOGGER.debug("Setting global: {} = {}", name, value);
 
@@ -396,6 +396,19 @@ public final class QuickJSContext implements AutoCloseable {
             return value.get();
         };
         setGlobal(name, (Object) function);
+    }
+
+    public <T> T getInterface(Class<T> clasz) {
+        return null; // TODO: Implement if needed
+    }
+
+    public <T> T getInterface(Object thiz, Class<T> clasz) {
+        if (!(thiz instanceof QuickJSObject)) {
+            throw new IllegalArgumentException("Target object must be a QuickJSObject");
+        }
+        @SuppressWarnings("unchecked")
+        QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) thiz;
+        return obj.getInterface(clasz);
     }
 
     /**
