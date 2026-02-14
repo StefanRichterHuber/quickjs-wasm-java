@@ -103,7 +103,7 @@ public class QuickJSExample {
 }
 ```
 
-For more comprehensive examples and detailed usage patterns, refer to the unit tests: [`io.github.stefanrichterhuber.quickjswasmjava.QuickJSContextTest`](src/test/java/io/github/stefanrichterhuber/quickjswasmjava/QuickJSContextTest.java). The context object ``io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext`` provides a set of methods to interact with the JavaScript runtime. It also implements `javax.script.Invocable`, allowing to invoke JavaScript functions from Java or map them to Java interfaces.
+ The context object `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` is the main entry point to interact with the JavaScript runtime. It provides a set of methods to interact with the JavaScript runtime, set global variables, evaluate scripts, and more. It also implements `javax.script.Invocable`, allowing to invoke JavaScript functions from Java or map them to Java interfaces.
 
 ```java
     public interface TestInterface {
@@ -122,6 +122,7 @@ For more comprehensive examples and detailed usage patterns, refer to the unit t
         }
 ```
 
+For more comprehensive examples and detailed usage patterns, refer to the unit tests: [`io.github.stefanrichterhuber.quickjswasmjava.QuickJSContextTest`](src/test/java/io/github/stefanrichterhuber/quickjswasmjava/QuickJSContextTest.java).
 
 ## Type Mapping
 
