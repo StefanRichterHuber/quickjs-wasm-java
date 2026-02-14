@@ -126,6 +126,7 @@ public final class QuickJSContext implements AutoCloseable {
 
             Object result = null;
             if (realArgs instanceof List) {
+                @SuppressWarnings("unchecked")
                 List<Object> argsList = (List<Object>) realArgs;
                 result = function.apply(argsList);
             } else {
@@ -325,6 +326,7 @@ public final class QuickJSContext implements AutoCloseable {
         if (value instanceof QuickJSFunction) {
             setGlobal(name, (Object) value);
         } else {
+            @SuppressWarnings("unchecked")
             final Function<List<Object>, Object> function = (args) -> {
                 return value.apply((P) args.get(0));
             };
@@ -342,6 +344,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, Q, R> void setGlobal(String name, BiFunction<P, Q, R> value) {
+        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             return value.apply((P) args.get(0), (Q) args.get(1));
         };
@@ -356,6 +359,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P> void setGlobal(String name, Consumer<P> value) {
+        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             value.accept((P) args.get(0));
             return null;
@@ -372,6 +376,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param value The function to set.
      */
     public <P, Q> void setGlobal(String name, BiConsumer<P, Q> value) {
+        @SuppressWarnings("unchecked")
         final Function<List<Object>, Object> function = (args) -> {
             value.accept((P) args.get(0), (Q) args.get(1));
             return null;
@@ -441,6 +446,7 @@ public final class QuickJSContext implements AutoCloseable {
      * @param packer The message pack packer.
      * @throws IOException If the object cannot be packed.
      */
+    @SuppressWarnings("unchecked")
     void packObject(Object obj, MessagePacker packer) throws IOException {
         if (obj == null) {
             packer.packString("null");

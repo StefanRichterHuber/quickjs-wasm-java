@@ -148,6 +148,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         return keySet().stream().map(k -> new QuickJSObjectEntry<>(this, k)).collect(Collectors.toSet());
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public V get(Object key) {
         if (key == null) {
@@ -175,6 +176,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         return this.size() == 0;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public Set<K> keySet() {
         final long[] result = this.keySet.apply(this.getContextPointer(), this.getObjectPointer());
@@ -240,6 +242,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         return entrySet().stream().map(Entry::getValue).collect(Collectors.toList());
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public boolean equals(Object other) {
         // Shortcut test if both objects point to the same native object

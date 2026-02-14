@@ -143,6 +143,7 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         return (int) result[0];
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public T get(int index) {
         if (index < 0 || index >= size()) {
@@ -214,6 +215,7 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         return oldValue;
     }
 
+    @SuppressWarnings("unchecked")
     @Override
     public boolean equals(Object other) {
         // Shortcut test if both arrays point to the same native arrays
