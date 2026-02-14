@@ -1,6 +1,5 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
-import java.io.IOException;
 import java.util.List;
 import java.util.function.Function;
 

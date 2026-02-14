@@ -263,6 +263,7 @@ impl JavaFunction {
             let args = rmp_serde::to_vec(&arg).expect("MsgPack encode failed");
             let args_len = args.len();
             let args_ptr = args.as_ptr();
+            std::mem::forget(args); // Prevent drop
 
             // Call Java function
             let result = unsafe { call_java_function(context, func, args_ptr, args_len) };

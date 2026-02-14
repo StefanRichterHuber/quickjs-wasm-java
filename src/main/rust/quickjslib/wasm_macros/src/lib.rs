@@ -1,5 +1,6 @@
 use proc_macro::TokenStream;
 use quote::{format_ident, quote};
+use regex::Regex;
 use syn::{parse_macro_input, FnArg, ItemFn, Pat, ReturnType};
 
 #[proc_macro_attribute]
@@ -12,6 +13,9 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
     let mut wrapper_args = Vec::new();
     let mut conversions = Vec::new();
     let mut call_args = Vec::new();
+
+    let box_regex = Regex::new(r"Box < ([\s\w<>']*) >").unwrap();
+    let persistent_regex = Regex::new(r"& (Persistent < [\w\s<>']* >)").unwrap();
 
     for arg in &input_fn.sig.inputs {
         if let FnArg::Typed(pat_type) = arg {
@@ -40,60 +44,26 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 conversions.push(quote! {
                     let #arg_name = unsafe { &*(#arg_name as *mut Context) };
                 });
-            } else if type_str == "Box < Context >" {
+            } else if let Some(caps) = box_regex.captures(&type_str) {
                 wrapper_args.push(quote!(#arg_name: u64));
                 call_args.push(quote!(#arg_name));
+                // Get the string content inside the Box < ... >
+                let inner_type_string = &caps[1];
+                let inner_type: syn::Type =
+                    syn::parse_str(inner_type_string).expect("Failed to parse inner type of Box");
 
                 conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Context) };
+                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut #inner_type) };
                 });
-            } else if type_str == "Box < Runtime >" {
+            } else if let Some(caps) = persistent_regex.captures(&type_str) {
                 wrapper_args.push(quote!(#arg_name: u64));
                 call_args.push(quote!(#arg_name));
+                let inner_type_string = &caps[1];
+                let inner_type: syn::Type = syn::parse_str(inner_type_string)
+                    .expect("Failed to parse inner type Persistent");
 
                 conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Runtime) };
-                });
-            } else if type_str == "Box < Persistent < Function < 'static > > >" {
-                wrapper_args.push(quote!(#arg_name: u64));
-                call_args.push(quote!(#arg_name));
-
-                conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Function>) };
-                });
-            } else if type_str == "Box < Persistent < Array < 'static > > >" {
-                wrapper_args.push(quote!(#arg_name: u64));
-                call_args.push(quote!(#arg_name));
-
-                conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Array>) };
-                });
-            } else if type_str == "Box < Persistent < Object < 'static > > >" {
-                wrapper_args.push(quote!(#arg_name: u64));
-                call_args.push(quote!(#arg_name));
-
-                conversions.push(quote! {
-                    let #arg_name = unsafe { Box::from_raw(#arg_name as *mut Persistent<Object>) };
-                });
-            } else if type_str == "& Persistent < Function < 'static > >" {
-                wrapper_args.push(quote!(#arg_name: u64));
-                call_args.push(quote!(#arg_name));
-                conversions.push(quote! {
-                    let #arg_name = unsafe { &*(#arg_name as *mut Persistent<Function>) };
-                });
-            } else if type_str == "& Persistent < Array < 'static > >" {
-                wrapper_args.push(quote!(#arg_name: u64));
-                call_args.push(quote!(#arg_name));
-                conversions.push(quote! {
-                    log::debug!("Restored native array from pointer: {}", #arg_name);
-                    let #arg_name = unsafe { &*(#arg_name as *mut Persistent<Array>) };
-                });
-            } else if type_str == "& Persistent < Object < 'static > >" {
-                wrapper_args.push(quote!(#arg_name: u64));
-                call_args.push(quote!(#arg_name));
-                conversions.push(quote! {
-                    log::debug!("Restored native object from pointer: {}", #arg_name);
-                    let #arg_name = unsafe { &*(#arg_name as *mut Persistent<Object>) };
+                    let #arg_name = unsafe { &*(#arg_name as *mut #inner_type) };
                 });
             } else {
                 let ptr_name = format_ident!("{}_ptr", arg_name);
@@ -158,28 +128,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     std::mem::forget(bytes); // Prevent drop
                     ((ptr as u64) << 32) | (len as u64)
                 }
-            } else if type_str == "Box < Runtime >" {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    // return the pointer to the runtime
-                    let ptr =  Box::into_raw(result);
-                    ptr as u64
-                }
-            } else if type_str == "Box < Context >" {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    // return the pointer to the runtime
-                    let ptr =  Box::into_raw(result);
-                    ptr as u64
-                }
-            } else if type_str == "Box < Persistent < Object < 'static > > >" {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    // return the pointer to the runtime
-                    let ptr =  Box::into_raw(result);
-                    ptr as u64
-                }
-            } else if type_str == "Box < Persistent < Array < 'static > > >" {
+            } else if let Some(_) = box_regex.captures(&type_str) {
                 quote! {
                     let result = #fn_name(#(#call_args),*);
                     // return the pointer to the runtime
