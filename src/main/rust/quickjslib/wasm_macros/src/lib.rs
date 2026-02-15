@@ -44,6 +44,43 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 conversions.push(quote! {
                     let #arg_name = unsafe { &*(#arg_name as *mut Context) };
                 });
+            } else if type_str == "& Ctx < '_ >" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                let context_name = format_ident!("{}_context", arg_name);
+                let org_fn = format_ident!("{}_org", fn_name);
+
+                let mut call_args_without_context = Vec::new();
+                let mut call_args_with_context = Vec::new();
+                for arg in &input_fn.sig.inputs {
+                    if let FnArg::Typed(pat_type) = arg {
+                        let arg_name = if let Pat::Ident(id) = &*pat_type.pat {
+                            &id.ident
+                        } else {
+                            continue;
+                        };
+                        let arg_type = &pat_type.ty;
+                        if quote!(#arg_type).to_string() != "& Ctx < '_ >" {
+                            call_args_without_context.push(quote!(#arg_name));
+                            call_args_with_context.push(quote!(#arg_name));
+                        } else {
+                            call_args_with_context.push(quote!(&#arg_name));
+                        }
+                    }
+                }
+
+                conversions.push(quote! {
+                    let #context_name = unsafe { &*(#arg_name as *mut Context) };
+
+                    let #org_fn = #fn_name;
+                    let #fn_name = | #(#call_args_without_context),* | {
+                        // TODO: How to transfer the rest of the parameters to the call of org_fn??
+                        #context_name.with(|#arg_name| match #org_fn( #(#call_args_with_context),* ) {
+                            Ok(value) => value,
+                            Err(err) => handle_error(err, #arg_name),
+                        })
+                    };
+
+                });
             } else if let Some(caps) = box_regex.captures(&type_str) {
                 wrapper_args.push(quote!(#arg_name: u64));
                 call_args.push(quote!(#arg_name));
