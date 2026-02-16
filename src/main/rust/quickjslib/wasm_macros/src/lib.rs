@@ -74,7 +74,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     let #org_fn = #fn_name;
                     let #fn_name = | #(#call_args_without_context),* | {
                         use crate::from_error::FromError;
-                        // TODO: How to transfer the rest of the parameters to the call of org_fn??
                         #context_name.with(|#arg_name| match #org_fn( #(#call_args_with_context),* ) {
                             Ok(value) => value,
                             Err(err) => FromError::from_err(&#arg_name, err),
@@ -91,7 +90,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     syn::parse_str(inner_type_string).expect("Failed to parse inner type of Box");
 
                 conversions.push(quote! {
-                     #[doc = concat!(" source type: '", stringify!(#inner_type), "'")]
                     let #arg_name = unsafe { Box::from_raw(#arg_name as *mut #inner_type) };
                 });
             } else if let Some(caps) = persistent_regex.captures(&type_str) {
@@ -102,7 +100,6 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .expect("Failed to parse inner type Persistent");
 
                 conversions.push(quote! {
-                     #[doc = concat!(" source type: '", stringify!(#inner_type), "'")]
                     let #arg_name = unsafe { &*(#arg_name as *mut #inner_type) };
                 });
             } else {
