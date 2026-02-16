@@ -3,10 +3,14 @@ use rquickjs::Ctx;
 
 use crate::js_to_java_proxy::JSJavaProxy;
 
+/// Trait for converting a rquickjs::Error into a value that can be returned to Java
+///
 pub trait FromError<'js>: Sized {
     fn from_err(ctx: &Ctx<'js>, err: rquickjs::Error) -> Self;
 }
 
+/// Converts a rquickjs::Error into a JSJavaProxy that can be returned to Java
+///
 impl<'js> FromError<'js> for JSJavaProxy {
     fn from_err(ctx: &Ctx<'js>, err: rquickjs::Error) -> Self {
         match err {
@@ -25,6 +29,8 @@ impl<'js> FromError<'js> for JSJavaProxy {
     }
 }
 
+/// Converts a rquickjs::Error into a bool that can be returned to Java
+///
 impl<'js> FromError<'js> for bool {
     fn from_err(ctx: &Ctx<'js>, err: rquickjs::Error) -> Self {
         match err {
@@ -48,6 +54,8 @@ impl<'js> FromError<'js> for bool {
     }
 }
 
+/// Converts a rquickjs::Error into a i32 that can be returned to Java
+///
 impl<'js> FromError<'js> for i32 {
     fn from_err(ctx: &Ctx<'js>, err: rquickjs::Error) -> Self {
         match err {

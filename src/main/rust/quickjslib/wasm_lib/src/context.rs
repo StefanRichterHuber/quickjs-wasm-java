@@ -2,11 +2,9 @@ use log::debug;
 use log::error;
 use rquickjs::Context;
 use rquickjs::Ctx;
-use rquickjs::Error;
 use rquickjs::Runtime;
 use wasm_macros::wasm_export;
 
-use crate::from_error::FromError;
 use crate::js_to_java_proxy::JSJavaProxy;
 
 #[wasm_export]
@@ -20,24 +18,6 @@ pub fn create_context(runtime: &Runtime) -> Box<Context> {
 pub fn close_context(context: Box<Context>) {
     debug!("Closing QuickJS context");
     drop(context);
-}
-
-/// Handles errors that occur during QuickJS operations.
-///
-/// This function converts `rquickjs::Error` into `JSJavaProxy::Exception`.
-/// If the error is an `Exception`, it attempts to extract the message and stack trace.
-/// Otherwise, it falls back to the standard error string representation.
-///
-/// # Arguments
-///
-/// * `err` - The error to handle.
-/// * `ctx` - The QuickJS context, used to catch and inspect exceptions.
-///
-/// # Returns
-///
-/// A `JSJavaProxy::Exception` containing the error message and stack trace.
-pub fn handle_error<'js, V: FromError<'js>>(err: Error, ctx: &Ctx<'js>) -> V {
-    V::from_err(ctx, err)
 }
 
 #[wasm_export]

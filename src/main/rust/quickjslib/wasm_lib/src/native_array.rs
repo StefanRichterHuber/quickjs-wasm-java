@@ -1,7 +1,7 @@
 use rquickjs::{prelude::This, Array, Context, Ctx, Function, Persistent};
 use wasm_macros::wasm_export;
 
-use crate::{context::handle_error, js_to_java_proxy::JSJavaProxy};
+use crate::js_to_java_proxy::JSJavaProxy;
 
 #[wasm_export]
 pub fn array_create(context: &Context) -> Box<Persistent<Array<'static>>> {

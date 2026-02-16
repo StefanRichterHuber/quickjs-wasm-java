@@ -2,7 +2,7 @@ use log::debug;
 use rquickjs::{object::ObjectKeysIter, Context, Ctx, IntoAtom, Object, Persistent};
 use wasm_macros::wasm_export;
 
-use crate::{context::handle_error, js_to_java_proxy::JSJavaProxy};
+use crate::js_to_java_proxy::JSJavaProxy;
 
 #[wasm_export]
 pub fn object_create(context: &Context) -> Box<Persistent<Object<'static>>> {

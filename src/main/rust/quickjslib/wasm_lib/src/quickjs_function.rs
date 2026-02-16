@@ -2,7 +2,7 @@ use log::debug;
 use rquickjs::{Context, Ctx, Function, Persistent};
 use wasm_macros::wasm_export;
 
-use crate::{context::handle_error, js_to_java_proxy::JSJavaProxy};
+use crate::js_to_java_proxy::JSJavaProxy;
 
 #[wasm_export]
 pub fn call_function<'js>(

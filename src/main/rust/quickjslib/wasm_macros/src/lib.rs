@@ -73,10 +73,11 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                     let #org_fn = #fn_name;
                     let #fn_name = | #(#call_args_without_context),* | {
+                        use crate::from_error::FromError;
                         // TODO: How to transfer the rest of the parameters to the call of org_fn??
                         #context_name.with(|#arg_name| match #org_fn( #(#call_args_with_context),* ) {
                             Ok(value) => value,
-                            Err(err) => handle_error(err, &#arg_name),
+                            Err(err) => FromError::from_err(&#arg_name, err),
                         })
                     };
 
