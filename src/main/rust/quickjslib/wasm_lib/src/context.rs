@@ -75,11 +75,8 @@ pub fn eval_script(context: &Context, script: String) -> JSJavaProxy {
 ///
 /// Invokes a function in the QuickJS context.
 ///
-pub fn invoke_function(
-    ctx: &Ctx<'_>,
-    name: String,
-    args: JSJavaProxy,
-) -> rquickjs::Result<JSJavaProxy> {
+#[wasm_export]
+pub fn invoke(ctx: &Ctx<'_>, name: String, args: JSJavaProxy) -> rquickjs::Result<JSJavaProxy> {
     let f: rquickjs::Value = ctx.globals().get(&name)?;
 
     let result = if f.is_function() {
@@ -90,16 +87,6 @@ pub fn invoke_function(
         error!("Function {} is not a function", &name);
         Err(rquickjs::Error::Exception)
     };
-    result
-}
-
-#[wasm_export]
-pub fn invoke(context: &Context, name: String, args: JSJavaProxy) -> JSJavaProxy {
-    debug!("Invoking function: {}", name);
-    let result: JSJavaProxy = context.with(|ctx| match invoke_function(&ctx, name, args) {
-        Ok(value) => value,
-        Err(err) => handle_error(err, ctx),
-    });
     result
 }
 
