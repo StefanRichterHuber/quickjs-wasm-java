@@ -1,5 +1,7 @@
 use std::mem;
 mod context;
+mod from_error;
+mod into_wasm_result;
 mod java_log;
 mod js_to_java_proxy;
 mod native_array;

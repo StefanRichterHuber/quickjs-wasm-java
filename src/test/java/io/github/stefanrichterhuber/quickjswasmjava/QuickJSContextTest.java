@@ -579,7 +579,8 @@ public class QuickJSContextTest {
     }
 
     /**
-     * Invoking a JS function directly from java is possible
+     * Invoking a JS function directly from java is possible. Even nested calls to
+     * existing objects are supported
      * 
      * @throws Exception
      */
@@ -588,9 +589,21 @@ public class QuickJSContextTest {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
                 QuickJSContext context = runtime.createContext()) {
 
-            context.eval("function a(x, y) { return x + y; };");
-            Object result = context.invoke("a", 1, 2);
-            assertEquals(3, result);
+            {
+                context.eval("function a(x, y) { return x + y; };");
+                Object result = context.invoke("a", 1, 2);
+                assertEquals(3, result);
+            }
+            {
+                context.eval("var g = {f: function(x, y) { return x + y; }};");
+                Object result = context.invoke("g.f", 1, 2);
+                assertEquals(3, result);
+            }
+            {
+                context.eval("var c = {b: {f: function(x, y) { return x + y; }}};");
+                Object result = context.invoke("c.b.f", 1, 2);
+                assertEquals(3, result);
+            }
         }
     }
 

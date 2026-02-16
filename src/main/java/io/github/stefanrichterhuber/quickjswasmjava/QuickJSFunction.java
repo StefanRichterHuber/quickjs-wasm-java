@@ -5,6 +5,8 @@ import java.util.function.Function;
 
 import com.dylibso.chicory.runtime.ExportFunction;
 
+import io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime.ScriptDurationGuard;
+
 /**
  * Represents a quickjs native function
  */
@@ -57,7 +59,8 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
 
         // Don't close the memory location here, because it will be used by the wasm
         // function
-        try (final MemoryLocation memoryLocation = context.writeToMemory(params)) {
+        try (final ScriptDurationGuard guard = new ScriptDurationGuard(this.context.getRuntime());
+                final MemoryLocation memoryLocation = context.writeToMemory(params)) {
             final long[] result = call.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
                     memoryLocation.length());
 
@@ -67,7 +70,6 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
                 return r;
             }
         }
-
     }
 
     /**

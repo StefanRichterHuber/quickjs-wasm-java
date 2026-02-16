@@ -1,5 +1,4 @@
-use log::{debug, error};
-use rquickjs::{prelude::This, Array, Context, Function, Persistent};
+use rquickjs::{prelude::This, Array, Context, Ctx, Function, Persistent};
 use wasm_macros::wasm_export;
 
 use crate::{context::handle_error, js_to_java_proxy::JSJavaProxy};
@@ -24,106 +23,61 @@ pub fn array_close(_context: &Context, object: Box<Persistent<Array<'static>>>) 
 }
 
 #[wasm_export]
-pub fn array_size(context: &Context, persistent_array: &Persistent<Array<'static>>) -> i32 {
-    let result = context.with(|ctx| match persistent_array.clone().restore(&ctx) {
-        Ok(v) => v.len() as i32,
-        Err(err) => {
-            error!("Failed to restore persitent array: {}", err);
-            -1
-        }
-    });
-    debug!("Size of the native array {}", result);
-    result as i32
+pub fn array_size(
+    ctx: &Ctx<'_>,
+    persistent_array: &Persistent<Array<'static>>,
+) -> rquickjs::Result<i32> {
+    let v = persistent_array.clone().restore(&ctx)?;
+    Ok(v.len() as i32)
 }
 
 #[wasm_export]
 pub fn array_add(
-    context: &Context,
+    ctx: &Ctx<'_>,
     persistent_array: &Persistent<Array<'static>>,
     index: i32,
     value: JSJavaProxy,
-) -> bool {
-    let result = context.with(|ctx| {
-        let array = persistent_array.clone().restore(&ctx).unwrap();
-
-        match splice_array(array, index, 0, Some(value)) {
-            Ok(_) => true,
-            Err(err) => {
-                error!("Failed to add element at index {} to array: {}", index, err);
-                false
-            }
-        }
-    });
-
-    result
+) -> rquickjs::Result<bool> {
+    let array = persistent_array.clone().restore(&ctx)?;
+    splice_array(array, index, 0, Some(value))?;
+    Ok(true)
 }
 
 #[wasm_export]
 pub fn array_set(
-    context: &Context,
+    ctx: &Ctx<'_>,
     persistent_array: &Persistent<Array<'static>>,
     index: i32,
     value: JSJavaProxy,
-) -> bool {
-    let result = context.with(|ctx| {
-        let array = persistent_array.clone().restore(&ctx).unwrap();
+) -> rquickjs::Result<bool> {
+    let array = persistent_array.clone().restore(&ctx)?;
 
-        match array.set(index as usize, value) {
-            Ok(_) => true,
-            Err(err) => {
-                error!("Failed to set element at index {} in array: {}", index, err);
-                false
-            }
-        }
-    });
-
-    result
+    array.set(index as usize, value)?;
+    Ok(true)
 }
 
 #[wasm_export]
 pub fn array_get(
-    context: &Context,
+    ctx: &Ctx<'_>,
     persistent_array: &Persistent<Array<'static>>,
     index: i32,
-) -> JSJavaProxy {
-    let result = context.with(|ctx| {
-        let array = persistent_array.clone().restore(&ctx).unwrap();
+) -> rquickjs::Result<JSJavaProxy> {
+    let array = persistent_array.clone().restore(&ctx)?;
 
-        let result: JSJavaProxy = match array.get(index as usize) {
-            Ok(v) => v,
-            Err(err) => {
-                error!("Failed to get element from array: {}", err);
-                handle_error(err, ctx)
-            }
-        };
-        result
-    });
-
-    result
+    array.get(index as usize)?
 }
 
 #[wasm_export]
 pub fn array_remove(
-    context: &Context,
+    ctx: &Ctx<'_>,
     persistent_array: &Persistent<Array<'static>>,
     index: i32,
-) -> bool {
-    let result = context.with(|ctx| {
-        let array = persistent_array.clone().restore(&ctx).unwrap();
+) -> rquickjs::Result<bool> {
+    let array = persistent_array.clone().restore(&ctx)?;
 
-        match splice_array(array, index, 1, None) {
-            Ok(_) => true,
-            Err(err) => {
-                error!(
-                    "Failed to remove element at index {} from array: {}",
-                    index, err
-                );
-                false
-            }
-        }
-    });
+    splice_array(array, index, 1, None)?;
 
-    result
+    Ok(true)
 }
 
 /// Helper function to splice an array, by calling the splice method on the array.
@@ -143,7 +97,7 @@ fn splice_array<'js>(
     index: i32,
     delete_count: i32,
     value: Option<JSJavaProxy>,
-) -> Result<(), rquickjs::Error> {
+) -> rquickjs::Result<()> {
     let obj = rquickjs::Value::from(array).into_object().unwrap();
     let splice: Function = obj.get("splice")?;
     match value {

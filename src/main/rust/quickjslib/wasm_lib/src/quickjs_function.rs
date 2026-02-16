@@ -1,28 +1,18 @@
 use log::debug;
-use rquickjs::{Context, Function, Persistent};
+use rquickjs::{Context, Ctx, Function, Persistent};
 use wasm_macros::wasm_export;
 
 use crate::{context::handle_error, js_to_java_proxy::JSJavaProxy};
 
 #[wasm_export]
 pub fn call_function<'js>(
-    context: &Context,
+    ctx: &Ctx<'_>,
     persistent_function: &Persistent<Function<'static>>,
     args: JSJavaProxy,
-) -> JSJavaProxy {
-    let result = context.with(|ctx| {
-        let function = persistent_function.clone().restore(&ctx).unwrap();
-
-        debug!("Calling function with args: {:?}", args);
-        let result = match function.call(args) {
-            Ok(value) => value,
-            Err(err) => handle_error(err, ctx),
-        };
-        result
-    });
-    debug!("Function call result: {:?}", result);
-
-    result
+) -> rquickjs::Result<JSJavaProxy> {
+    let function = persistent_function.clone().restore(&ctx)?;
+    debug!("Calling function with args: {:?}", args);
+    function.call(args)?
 }
 
 #[wasm_export]

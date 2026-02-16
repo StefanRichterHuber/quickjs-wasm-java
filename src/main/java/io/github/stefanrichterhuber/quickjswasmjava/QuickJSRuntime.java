@@ -26,6 +26,24 @@ import com.dylibso.chicory.wasm.types.ValType;
  */
 public final class QuickJSRuntime implements AutoCloseable {
     /**
+     * Guard for the script duration. Ensures that the script duration is reset
+     * when the guard is closed.
+     */
+    static class ScriptDurationGuard implements AutoCloseable {
+        private final QuickJSRuntime runtime;
+
+        public ScriptDurationGuard(QuickJSRuntime runtime) {
+            this.runtime = runtime;
+            this.runtime.scriptStarted();
+        }
+
+        @Override
+        public void close() {
+            this.runtime.scriptFinished();
+        }
+    }
+
+    /**
      * Logger for the QuickJSRuntime class.
      */
     private static final Logger LOGGER = LogManager.getLogger(QuickJSRuntime.class);

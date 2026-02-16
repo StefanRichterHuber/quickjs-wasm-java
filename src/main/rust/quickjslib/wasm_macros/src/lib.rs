@@ -76,7 +76,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         // TODO: How to transfer the rest of the parameters to the call of org_fn??
                         #context_name.with(|#arg_name| match #org_fn( #(#call_args_with_context),* ) {
                             Ok(value) => value,
-                            Err(err) => handle_error(err, #arg_name),
+                            Err(err) => handle_error(err, &#arg_name),
                         })
                     };
 
@@ -90,6 +90,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     syn::parse_str(inner_type_string).expect("Failed to parse inner type of Box");
 
                 conversions.push(quote! {
+                     #[doc = concat!(" source type: '", stringify!(#inner_type), "'")]
                     let #arg_name = unsafe { Box::from_raw(#arg_name as *mut #inner_type) };
                 });
             } else if let Some(caps) = persistent_regex.captures(&type_str) {
@@ -100,6 +101,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                     .expect("Failed to parse inner type Persistent");
 
                 conversions.push(quote! {
+                     #[doc = concat!(" source type: '", stringify!(#inner_type), "'")]
                     let #arg_name = unsafe { &*(#arg_name as *mut #inner_type) };
                 });
             } else {
@@ -141,48 +143,12 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
             0
         },
         ReturnType::Type(_, ty) => {
-            let type_str = quote!(#ty).to_string();
-            if ["i32", "u32", "i64", "u64"].contains(&type_str.as_str()) {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    result as u64
-                }
-            } else if type_str == "bool" {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    if result {
-                        1
-                    } else {
-                        0
-                    }
-                }
-            } else if type_str == "String" {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    let bytes = result.as_bytes();
-                    let len = bytes.len();
-                    let ptr = bytes.as_ptr();
-                    std::mem::forget(bytes); // Prevent drop
-                    ((ptr as u64) << 32) | (len as u64)
-                }
-            } else if let Some(_) = box_regex.captures(&type_str) {
-                quote! {
-                    let result = #fn_name(#(#call_args),*);
-                    // return the pointer to the runtime
-                    let ptr =  Box::into_raw(result);
-                    ptr as u64
-                }
-            } else {
-                quote! {
-                    #[doc = concat!("target type: ", stringify!(#ty))]
-                    let result = #fn_name(#(#call_args),*);
-                    log::debug!("Converted return value: {:?}", result);
-                    let bytes = rmp_serde::to_vec(&result).expect("MsgPack encode failed");
-                    let len = bytes.len();
-                    let ptr = bytes.as_ptr();
-                    std::mem::forget(bytes); // Prevent drop
-                    ((ptr as u64) << 32) | (len as u64)
-                }
+            // let type_str = quote!(#ty).to_string();
+            quote! {
+                #[doc = concat!(" target type: ", stringify!(#ty))]
+                let result = #fn_name(#(#call_args),*);
+                use crate::into_wasm_result::IntoWasmResult;
+                result.into_wasm()
             }
         }
     };

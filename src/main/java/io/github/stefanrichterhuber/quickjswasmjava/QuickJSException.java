@@ -23,9 +23,7 @@ public class QuickJSException extends RuntimeException {
      * @param stack   The stack trace of the exception.
      */
     QuickJSException(String message, String stack) {
-        super(message);
-        this.stack = stack;
-        this.message = message;
+        this(message, stack, null);
     }
 
     /**

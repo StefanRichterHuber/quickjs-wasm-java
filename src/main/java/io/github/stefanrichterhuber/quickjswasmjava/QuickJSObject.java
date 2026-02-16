@@ -278,11 +278,33 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
      * @throws NoSuchMethodException If the function does not exist.
      */
     public Object invokeFunction(String name, Object... args) throws NoSuchMethodException {
-        Object f = get(name);
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("Name must not be null or empty");
+        }
+
+        // Support for calls on nested objects
+        if (name.contains(".")) {
+            final String functionName = name.substring(name.indexOf(".") + 1);
+            final String objectName = name.substring(0, name.indexOf("."));
+
+            final Object obj = this.get(objectName);
+            if (obj instanceof QuickJSObject) {
+                try {
+                    return ((QuickJSObject<?, ?>) obj).invokeFunction(functionName, args);
+                } catch (NoSuchMethodException e) {
+                    // Catch the no such method exceptions for nested calls to only throw the
+                    // exception with the correct name
+                    throw new NoSuchMethodException(name);
+                }
+            }
+            throw new NoSuchMethodException(name);
+        }
+
+        final Object f = get(name);
         if (f instanceof QuickJSFunction) {
             return ((QuickJSFunction) f).call(args);
         } else {
-            throw new NoSuchMethodException("Method " + name + " not found in object " + this);
+            throw new NoSuchMethodException(name);
         }
     }
 }

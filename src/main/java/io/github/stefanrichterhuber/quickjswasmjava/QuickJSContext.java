@@ -30,6 +30,8 @@ import org.msgpack.value.ValueType;
 import com.dylibso.chicory.runtime.ExportFunction;
 import com.dylibso.chicory.runtime.Instance;
 
+import io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime.ScriptDurationGuard;
+
 /**
  * Java representation of a QuickJS context object. The context is the central
  * interaction point with the JS runtime. Here you set / get global variables
@@ -160,18 +162,40 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param name The name of the function to invoke.
      * @param args The arguments to pass to the function.
      * @return The result of the function.
+     * @throws NoSuchMethodException
      */
-    public Object invoke(String name, Object... args) {
+    public Object invoke(String name, Object... args) throws NoSuchMethodException {
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("Name must not be null or empty");
+        }
+
+        // Support for directly calling functions in (nested) objects
+        if (name.contains(".")) {
+            final String functionName = name.substring(name.indexOf(".") + 1);
+            final String objectName = name.substring(0, name.indexOf("."));
+
+            final Object obj = this.getGlobal(objectName);
+            try {
+                if (obj instanceof QuickJSObject<?, ?>) {
+                    return ((QuickJSObject<?, ?>) obj).invokeFunction(functionName, args);
+                }
+            } catch (NoSuchMethodException e) {
+                // Catch the no such method exceptions for nested calls to only throw the
+                // exception
+                // with the correct name
+            }
+            throw new NoSuchMethodException(name);
+        }
+
         try (final MemoryLocation nameLocation = this.writeStringToMemory(name);
-                final MemoryLocation argsLocation = this.writeToMemory(List.of(args));) {
-            runtime.scriptStarted();
+                final MemoryLocation argsLocation = this.writeToMemory(List.of(args));
+                final ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime);) {
             final long[] result = invoke.apply(contextPtr, nameLocation.pointer(), nameLocation.length(),
                     argsLocation.pointer(),
                     argsLocation.length());
             // Read the result with messagepack java, it is a pointer and a length to a
             // message pack object
 
-            // TODO: Determine when to cleanup the memory location and when not
             try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
                 final Object r = unpackObjectFromMemory(resultLocation);
                 if (r instanceof RuntimeException) {
@@ -180,8 +204,6 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
                 return r;
             }
-        } finally {
-            runtime.scriptFinished();
         }
     }
 
@@ -193,8 +215,8 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @throws IOException If the script cannot be evaluated.
      */
     public Object eval(String script) throws IOException {
-        try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);) {
-            runtime.scriptStarted();
+        try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);
+                ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
             long[] result = eval.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
             // Read the result with messagepack java, it is a pointer and a length to a
             // message pack object
@@ -206,8 +228,6 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
                 return r;
             }
-        } finally {
-            runtime.scriptFinished();
         }
     }
 
@@ -475,12 +495,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
     @Override
     public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
-        if (name == null)
-            throw new IllegalArgumentException("Function name cannot be null");
-        Object g = getGlobal(name);
-        if (g instanceof QuickJSFunction)
-            return ((QuickJSFunction) g).call(args);
-        throw new NoSuchMethodException("No such function: " + name + " in global scope");
+        return this.invoke(name, args);
     }
 
     /**
