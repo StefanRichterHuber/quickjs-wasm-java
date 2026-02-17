@@ -9,6 +9,7 @@ import java.util.Arrays;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -58,6 +59,11 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     private final ExportFunction eval;
 
     /**
+     * The native eval with async support function.
+     */
+    private final ExportFunction evalAsync;
+
+    /**
      * The native createContext function.
      */
     private final ExportFunction createContext;
@@ -83,6 +89,11 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     private final ExportFunction invoke;
 
     /**
+     * The native poll function.
+     */
+    private final ExportFunction poll;
+
+    /**
      * List of resources that are dependent on this context. If this context is
      * closed, all dependent resources will be closed too.
      */
@@ -92,6 +103,11 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * List of host functions.
      */
     private final List<Function<List<Object>, Object>> hostFunctions = new ArrayList<>();
+
+    /**
+     * List of completable futures wrapping native promises.
+     */
+    private final List<CompletableFuture<Object>> completableFutures = new ArrayList<>();
 
     /**
      * Creates a new QuickJS context from a existing runtime. Not public, use
@@ -107,6 +123,8 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         this.setGlobal = runtime.getInstance().export("set_global_wasm");
         this.getGlobal = runtime.getInstance().export("get_global_wasm");
         this.invoke = runtime.getInstance().export("invoke_wasm");
+        this.evalAsync = runtime.getInstance().export("eval_script_async_wasm");
+        this.poll = runtime.getInstance().export("poll_wasm");
         this.contextPtr = createContext.apply(runtime.getRuntimePointer())[0];
 
     }
@@ -154,6 +172,38 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
             MemoryLocation resultLocation = this.writeToMemory(e);
             return new long[] { resultLocation.pack() };
         }
+    }
+
+    /**
+     * Creates a new completable future and returns its index. Used to wrap native
+     * promises.
+     */
+    long[] createCompletableFutureHostFunction(Instance instance) {
+        final CompletableFuture<Object> completableFuture = new CompletableFuture<>();
+        this.completableFutures.add(completableFuture);
+        return new long[] { this.completableFutures.size() - 1 };
+    }
+
+    long[] completeCompletableFutureHostFunction(Instance instance, int reject, int futurePtr, long argPtr,
+            int argLen) {
+        final CompletableFuture<Object> f = this.completableFutures.get(futurePtr);
+        if (f == null) {
+            throw new IllegalStateException("No completable future found for index " + futurePtr);
+        }
+
+        try (MemoryLocation arg = new MemoryLocation(argPtr, argLen, this.getRuntime())) {
+            final Object r = unpackObjectFromMemory(arg);
+            if (r instanceof Exception) {
+                f.completeExceptionally((Exception) r);
+            } else {
+                if (reject == 1) {
+                    f.completeExceptionally(new QuickJSException("Promise rejected", null));
+                } else {
+                    f.complete(r);
+                }
+            }
+        }
+        return new long[] { 0 };
     }
 
     /**
@@ -212,9 +262,8 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * 
      * @param script The script to evaluate.
      * @return The result of the script.
-     * @throws IOException If the script cannot be evaluated.
      */
-    public Object eval(String script) throws IOException {
+    public Object eval(String script) {
         try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);
                 ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
             long[] result = eval.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
@@ -229,6 +278,39 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
                 return r;
             }
         }
+    }
+
+    /**
+     * Evaluates a script in the QuickJS context with async support
+     * 
+     * @param script The script to evaluate.
+     * @return The result of the script.
+     */
+    public CompletableFuture<Object> evalAsync(String script) {
+        try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);
+                ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
+            long[] result = evalAsync.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
+            // Read the result with messagepack java, it is a pointer and a length to a
+            // message pack object
+            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
+                final Object r = unpackObjectFromMemory(resultLocation);
+                if (r instanceof RuntimeException) {
+                    throw (RuntimeException) r;
+                }
+
+                return (CompletableFuture<Object>) r;
+            }
+        }
+    }
+
+    /**
+     * Polls the QuickJS context for pending jobs.
+     * 
+     * @return true if there are pending jobs, false otherwise.
+     */
+    public boolean poll() {
+        long[] result = poll.apply(contextPtr);
+        return result[0] == 1;
     }
 
     /**
@@ -380,7 +462,9 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         } else {
             @SuppressWarnings("unchecked")
             final Function<List<Object>, Object> function = (args) -> {
-                return value.apply((P) args.get(0));
+                Object arg = args != null && args.size() > 0 ? args.get(0) : null;
+                Object result = value.apply((P) arg);
+                return result;
             };
             setGlobal(name, (Object) function);
         }
@@ -596,6 +680,24 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
             for (Object item : (List<?>) obj) {
                 packObject(item, packer);
             }
+        } else if (obj instanceof QuickJSPromise) {
+            packer.packMapHeader(1);
+            packer.packString("completableFuture");
+            packer.packArrayHeader(2);
+
+            this.completableFutures.add((CompletableFuture<Object>) obj);
+            packer.packInt(this.completableFutures.size() - 1);
+            packer.packLong(((QuickJSPromise) obj).getPromisePtr());
+
+        } else if (obj instanceof CompletableFuture) {
+            packer.packMapHeader(1);
+            packer.packString("completableFuture");
+            packer.packArrayHeader(2);
+
+            this.completableFutures.add((CompletableFuture<Object>) obj);
+            packer.packInt(this.completableFutures.size() - 1);
+            packer.packLong(0l);
+
         } else if (obj instanceof QuickJSObject) {
             packer.packMapHeader(1);
             packer.packString("nativeObject");
@@ -756,6 +858,22 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
                 case "nativeObject": {
                     long pointer = unpacker.unpackLong();
                     return new QuickJSObject<>(this, pointer);
+                }
+                case "completableFuture": {
+                    final int arraySize = unpacker.unpackArrayHeader();
+                    if (arraySize != 2) {
+                        throw new RuntimeException(
+                                "Expected completableFuture with 2 element (completable futre pointer, promise pointer)");
+                    }
+                    final int futurePtr = unpacker.unpackInt();
+                    final long promisePtr = unpacker.unpackLong();
+
+                    // TODO wrap into a completablefuture with promise ptr
+                    final CompletableFuture<Object> f = this.completableFutures.get(futurePtr);
+                    if (f == null) {
+                        throw new IllegalStateException("No future for future ptr " + futurePtr + " found");
+                    }
+                    return f;
                 }
                 default:
                     throw new RuntimeException("Unknown type: " + type);

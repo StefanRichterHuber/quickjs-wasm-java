@@ -1,9 +1,14 @@
 use log::debug;
 use log::error;
+use log::info;
 use rquickjs::function::Args;
 use rquickjs::function::IntoJsFunc;
 use rquickjs::function::ParamRequirement;
+use rquickjs::function::Params;
+use rquickjs::function::This;
 use rquickjs::prelude::IntoArgs;
+use rquickjs::promise::PromiseState;
+use rquickjs::runtime::UserDataGuard;
 use rquickjs::Array;
 use rquickjs::Atom;
 use rquickjs::FromAtom;
@@ -13,11 +18,16 @@ use rquickjs::IntoAtom;
 use rquickjs::IntoJs;
 use rquickjs::Object;
 use rquickjs::Persistent;
+use rquickjs::Promise;
 use rquickjs::Value;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::completable_future::complete_completable_future;
+use crate::completable_future::create_completable_future;
+use crate::completable_future::JavaPromise;
+use crate::context::ContextPtr;
 use crate::quickjs_function::call_java_function;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -41,6 +51,8 @@ pub enum JSJavaProxy {
     JavaFunction(i32, i32),
     /// Fields: Message, Stacktrace
     Exception(String, String),
+    /// Fields: Pointer to java completable future, Pointer to native promise
+    CompletableFuture(i32, u64),
 }
 
 impl<'js> FromJs<'js> for JSJavaProxy {
@@ -122,6 +134,11 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 let object = persistent_object.clone().restore(ctx)?;
                 Ok(object.into_value())
             }
+            JSJavaProxy::CompletableFuture(future_ptr, promise_ptr) => {
+                let promise = unsafe { &*(promise_ptr as *mut Persistent<Promise>) };
+                let restored_promise = promise.clone().restore(ctx)?;
+                Ok(restored_promise.into_value())
+            }
         };
         result
     }
@@ -159,6 +176,129 @@ impl JSJavaProxy {
             return Ok(JSJavaProxy::Null);
         } else if value.is_undefined() {
             return Ok(JSJavaProxy::Undefined);
+        } else if value.is_promise() {
+            let promise = value.into_promise().unwrap();
+            let then_func = promise.then()?;
+            let catch_func = promise.catch()?;
+            let ctx = promise.ctx().clone();
+
+            // Restore the context pointer, hopefully found in the ctx
+            let ctx_pointer: UserDataGuard<ContextPtr> = ctx.userdata().unwrap();
+
+            info!("Found context pointer {}", ctx_pointer.ptr);
+
+            // Call then func with callback to completablefutures
+            // TODO: create promise on java side, get pointer to it
+            // First check if this promise already references a completable future
+            let completable_future_ptr = if let Ok(ptr) = promise.get("__completable_future_ptr") {
+                info!(
+                    "Retrieved CompletableFuture pointer {} from field {}",
+                    ptr, "__completable_future_ptr"
+                );
+                ptr
+            } else {
+                // Create new completablefuture and save pointer to it in the promise
+                let completable_future_ptr = unsafe { create_completable_future(ctx_pointer.ptr) };
+                info!(
+                    "Generated new CompletableFuture pointer {}",
+                    completable_future_ptr
+                );
+
+                promise.set("__completable_future_ptr", completable_future_ptr)?;
+                completable_future_ptr
+            };
+
+            let persistent_promise = Persistent::save(&ctx, promise.clone());
+            let persistent_promise_ptr = Box::into_raw(Box::new(persistent_promise.clone())) as u64;
+
+            return match promise.state() {
+                PromiseState::Pending => {
+                    info!("Promise still pending!");
+                    let completable_future_complete = JavaPromise::new(
+                        ctx_pointer.ptr,
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                        false,
+                    );
+                    let completable_future_reject = JavaPromise::new(
+                        ctx_pointer.ptr,
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                        true,
+                    );
+
+                    let completable_future_complete = Function::new::<JSJavaProxy, JavaPromise>(
+                        ctx.clone(),
+                        completable_future_complete,
+                    )?;
+
+                    let completable_future_reject = Function::new::<JSJavaProxy, JavaPromise>(
+                        ctx.clone(),
+                        completable_future_reject,
+                    )?;
+
+                    let completable_future_complete =
+                        Value::from_function(completable_future_complete);
+                    let completable_future_reject = Value::from_function(completable_future_reject);
+
+                    // Use the same callback for onFulfilled and onRejected
+                    info!("Calling .then() on the promise");
+                    then_func.call::<_, ()>((
+                        This(promise.clone().into_value()),
+                        completable_future_complete.clone().into_js(&ctx)?, // onFulfilled
+                        completable_future_reject.clone().into_js(&ctx)?,   // onRejected
+                    ))?;
+
+                    catch_func.call::<_, ()>((
+                        This(promise.into_value()),
+                        completable_future_reject.into_js(&ctx)?,
+                    ))?;
+                    info!("Called .then() on the promise");
+
+                    Ok(JSJavaProxy::CompletableFuture(
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                    ))
+                }
+                PromiseState::Resolved => {
+                    // Promise already resolved -> complete completable future
+                    info!("Promise already resolved");
+
+                    let completable_future_complete = JavaPromise::new(
+                        ctx_pointer.ptr,
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                        false,
+                    );
+
+                    completable_future_complete.call_for_promise(promise)?;
+
+                    Ok(JSJavaProxy::CompletableFuture(
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                    ))
+                }
+                PromiseState::Rejected => {
+                    info!("Promise already rejected");
+
+                    // Promise already resolved -> complete completable future
+                    info!("Promise already resolved");
+
+                    let completable_future_reject = JavaPromise::new(
+                        ctx_pointer.ptr,
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                        true,
+                    );
+
+                    completable_future_reject.call_for_promise(promise)?;
+
+                    return Ok(JSJavaProxy::CompletableFuture(
+                        completable_future_ptr.try_into().unwrap(),
+                        persistent_promise_ptr,
+                    ));
+                }
+            };
         } else if value.is_function() {
             let function = value.into_function().unwrap();
             let ctx = function.ctx().clone();
@@ -307,6 +447,7 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
         &self,
         params: rquickjs::function::Params<'a, 'js>,
     ) -> rquickjs::Result<Value<'js>> {
+        info!("Calling Java function");
         let mut args: Vec<JSJavaProxy> = Vec::new();
         for i in 0..params.len() {
             let value = params.arg(i);

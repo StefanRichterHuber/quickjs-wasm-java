@@ -1,4 +1,5 @@
 use std::mem;
+mod completable_future;
 mod context;
 mod from_error;
 mod into_wasm_result;

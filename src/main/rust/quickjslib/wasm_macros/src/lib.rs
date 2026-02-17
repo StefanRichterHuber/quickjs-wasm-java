@@ -48,6 +48,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 wrapper_args.push(quote!(#arg_name: u64));
                 let context_name = format_ident!("{}_context", arg_name);
                 let org_fn = format_ident!("{}_org", fn_name);
+                let arg_ptr = format_ident!("{}_ptr", arg_name);
 
                 let mut call_args_without_context = Vec::new();
                 let mut call_args_with_context = Vec::new();
@@ -69,12 +70,17 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 }
 
                 conversions.push(quote! {
+                    let #arg_ptr = #arg_name;
                     let #context_name = unsafe { &*(#arg_name as *mut Context) };
 
                     let #org_fn = #fn_name;
-                    let #fn_name = | #(#call_args_without_context),* | {
+                    let #fn_name = | #(#call_args_without_context),* |   {
                         use crate::from_error::FromError;
-                        #context_name.with(|#arg_name| match #org_fn( #(#call_args_with_context),* ) {
+                        #context_name.with(|#arg_name| match {
+                             use crate::context;
+                             ctx.store_userdata(context::ContextPtr::new(#arg_ptr)).unwrap();
+                             #org_fn( #(#call_args_with_context),* )
+                        } {
                             Ok(value) => value,
                             Err(err) => FromError::from_err(&#arg_name, err),
                         })
