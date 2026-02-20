@@ -77,19 +77,40 @@ impl JavaPromise {
 }
 
 impl JavaPromise {
+    fn convert_value<'js>(val: Value<'js>) -> rquickjs::Result<JSJavaProxy> {
+        if val.is_object() {
+            let obj = val.as_object().unwrap();
+            if let Ok(v) = obj.get::<_, Value>("value") {
+                if !v.is_undefined() {
+                    return JSJavaProxy::convert(v);
+                }
+            }
+        }
+        JSJavaProxy::convert(val)
+    }
+
     pub fn call_for_promise<'js>(
         &self,
         arg: rquickjs::Promise<'js>,
     ) -> rquickjs::Result<Value<'js>> {
         info!("Calling JavaPromise.call_for_promise()");
         let ctx = arg.ctx().clone();
-        // Object with one property: value
-        let value = arg.as_object().unwrap().get("value").unwrap();
+        let mut reject = self.reject;
 
-        let arg = JSJavaProxy::convert(value)?;
+        let val = match arg.state() {
+            PromiseState::Resolved => Self::convert_value(arg.finish::<Value>().unwrap())?,
+            PromiseState::Rejected => {
+                reject = true;
+                match arg.finish::<Value>() {
+                    Ok(v) => JSJavaProxy::convert(v)?,
+                    Err(e) => JSJavaProxy::Exception(format!("{:?}", e), "".to_string()),
+                }
+            }
+            PromiseState::Pending => JSJavaProxy::Null,
+        };
 
         // Serialize args
-        let args = rmp_serde::to_vec(&arg).expect("MsgPack encode failed");
+        let args = rmp_serde::to_vec(&val).expect("MsgPack encode failed");
         let args_len = args.len();
         let args_ptr = args.as_ptr();
         std::mem::forget(args); // Prevent drop
@@ -98,7 +119,7 @@ impl JavaPromise {
         let _result = unsafe {
             complete_completable_future(
                 self.context_ptr,
-                if self.reject { 1 } else { 0 },
+                if reject { 1 } else { 0 },
                 self.completable_future_ptr,
                 args_ptr,
                 args_len,
@@ -120,51 +141,25 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaPromise {
     ) -> rquickjs::Result<Value<'js>> {
         info!("Calling JavaPromise.call() with reject {}", self.reject);
         let arg = params.arg(0).unwrap();
-        let mut reject = self.reject;
 
-        if arg.is_promise() {
-            info!("Call parameter is a promise");
+        let val = if arg.is_promise() {
             let promise = arg.clone().into_promise().unwrap();
-        } else {
-            info!("Call parameter is not a promise");
-        }
-
-        // Object with one property: value
-        let value: Value = arg.as_object().unwrap().get("value").unwrap();
-
-        let arg = if value.is_promise() {
-            info!("Value of call parameter is a promise");
-            let promise = value.clone().into_promise().unwrap();
-
             match promise.state() {
-                PromiseState::Pending => {
-                    info!("Called value Promise still pending!");
-                    let value = promise.finish()?;
-                    JSJavaProxy::convert(value)?
-                }
-                PromiseState::Resolved => {
-                    // Promise already resolved -> complete completable future
-                    info!("Called value Promise already resolved");
-                    let value = promise.finish()?;
-                    info!("Resolved called value Promise finished");
-                    JSJavaProxy::convert(value)?
-                }
+                PromiseState::Resolved => Self::convert_value(promise.finish::<Value>().unwrap())?,
                 PromiseState::Rejected => {
-                    info!("Called value Promise already rejected");
-                    reject = true;
-                    JSJavaProxy::Exception(
-                        "Promise rejected".to_string(),
-                        "Promise rejected".to_string(),
-                    )
+                    match promise.finish::<Value>() {
+                        Ok(v) => JSJavaProxy::convert(v)?,
+                        Err(e) => JSJavaProxy::Exception(format!("{:?}", e), "".to_string()),
+                    }
                 }
+                PromiseState::Pending => JSJavaProxy::Null,
             }
         } else {
-            info!("Value of call parameter is not a promise");
-            JSJavaProxy::convert(value)?
+            Self::convert_value(arg)?
         };
 
         // Serialize args
-        let args = rmp_serde::to_vec(&arg).expect("MsgPack encode failed");
+        let args = rmp_serde::to_vec(&val).expect("MsgPack encode failed");
         let args_len = args.len();
         let args_ptr = args.as_ptr();
         std::mem::forget(args); // Prevent drop
@@ -173,7 +168,7 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaPromise {
         let _result = unsafe {
             complete_completable_future(
                 self.context_ptr,
-                if reject { 1 } else { 0 },
+                if self.reject { 1 } else { 0 },
                 self.completable_future_ptr,
                 args_ptr,
                 args_len,

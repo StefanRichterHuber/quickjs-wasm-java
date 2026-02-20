@@ -78,7 +78,7 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                         use crate::from_error::FromError;
                         #context_name.with(|#arg_name| match {
                              use crate::context;
-                             ctx.store_userdata(context::ContextPtr::new(#arg_ptr)).unwrap();
+                             #arg_name.store_userdata(context::ContextPtr::new(#arg_ptr)).unwrap();
                              #org_fn( #(#call_args_with_context),* )
                         } {
                             Ok(value) => value,
