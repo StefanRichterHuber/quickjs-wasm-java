@@ -1,13 +1,19 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 /**
  * Represents a location in the QuickJS memory.
  */
 record MemoryLocation(long pointer, int length, QuickJSRuntime runtime) implements AutoCloseable {
+    private static final Logger LOGGER = LogManager.getLogger();
+
     /**
      * Frees the memory location.
      */
     public void free() {
+        LOGGER.debug("Freeing memory location at {} with length {}", pointer, length);
         runtime.dealloc(pointer, length);
     }
 

@@ -241,27 +241,23 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
         LOGGER.debug("Setting global: {} = {}", name, value);
 
-        // We must not close the memory location here, because it is used by the
-        // set global function
-        final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name);
-        // We must not close the memory location here, because it is used by the
-        // set global function
-        final MemoryLocation valueLocation = this.writeToMemory(value);
-        // Then call the set global function
-        final long[] result = setGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length(),
-                valueLocation.pointer(),
-                valueLocation.length());
+        try (final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name);
+                final MemoryLocation valueLocation = this.writeToMemory(value)) {
+            // Then call the set global function
+            final long[] result = setGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length(),
+                    valueLocation.pointer(),
+                    valueLocation.length());
 
-        // Cleanup the memory location after reading the result
-        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
-            final Object r = unpackObjectFromMemory(resultLocation);
-            if (r == null) {
-                return;
-            }
-            if (r instanceof RuntimeException) {
-                throw (RuntimeException) r;
-            } else {
-                throw new RuntimeException("Unexpected result: " + r);
+            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
+                final Object r = unpackObjectFromMemory(resultLocation);
+                if (r == null) {
+                    return;
+                }
+                if (r instanceof RuntimeException) {
+                    throw (RuntimeException) r;
+                } else {
+                    throw new RuntimeException("Unexpected result: " + r);
+                }
             }
         }
     }
@@ -275,19 +271,16 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     public Object getGlobal(String name) {
         LOGGER.debug("Getting global: {}", name);
 
-        // We must not close the memory location here, because it is used by the
-        // set global function
-        final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name);
+        try (final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name)) {
+            final long[] result = getGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length());
 
-        final long[] result = getGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length());
-
-        // Cleanup the memory location after reading the result
-        try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
-            final Object r = unpackObjectFromMemory(resultLocation);
-            if (r instanceof RuntimeException) {
-                throw (RuntimeException) r;
-            } else {
-                return r;
+            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
+                final Object r = unpackObjectFromMemory(resultLocation);
+                if (r instanceof RuntimeException) {
+                    throw (RuntimeException) r;
+                } else {
+                    return r;
+                }
             }
         }
     }
