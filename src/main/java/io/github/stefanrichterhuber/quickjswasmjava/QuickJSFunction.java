@@ -64,11 +64,7 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
             final long[] result = call.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
                     memoryLocation.length());
 
-            // Cleanup the memory location after reading the result
-            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], context.getRuntime())) {
-                final Object r = context.unpackObjectFromMemory(resultLocation);
-                return r;
-            }
+            return this.context.handleNativeResult(result);
         }
     }
 
