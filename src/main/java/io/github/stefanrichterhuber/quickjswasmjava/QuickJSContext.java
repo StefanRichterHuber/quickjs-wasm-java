@@ -130,19 +130,15 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         try (MemoryLocation argsLocation = new MemoryLocation(argPtr, (int) argLen, this.getRuntime())) {
             final Object realArgs = unpackObjectFromMemory(argsLocation);
 
-            Object result = null;
-            if (realArgs instanceof List) {
-                @SuppressWarnings("unchecked")
-                List<Object> argsList = (List<Object>) realArgs;
-                result = function.apply(argsList);
-            } else {
-                List<Object> argsList = List.of(realArgs);
-                result = function.apply(argsList);
-            }
+            final List<Object> args = switch (realArgs) {
+                case List<?> l -> (List<Object>) l;
+                default -> List.of(realArgs);
+            };
+            final Object result = function.apply(args);
 
             // Now we have to write the result back to the memory (don't close the memory
             // location here!)
-            MemoryLocation resultLocation = this.writeToMemory(result);
+            final MemoryLocation resultLocation = this.writeToMemory(result);
             return new long[] { resultLocation.pack() };
         } catch (RuntimeException e) {
             MemoryLocation resultLocation = this.writeToMemory(e);
