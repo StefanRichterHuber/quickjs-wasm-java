@@ -11,7 +11,7 @@ While several mature JavaScript runtimes exist for Java, such as [Nashorn](https
 **QuickJS Java offers a distinct alternative with a focus on security, stability, and ease of deployment:**
 
 *   **Secure Isolation:** Provides a lean, well-defined, and type-safe interface. JavaScript scripts can only access objects explicitly passed into the runtime, offering a sandboxed environment with no inherent access to the broader Java application.
-*   **Resource Control:** Easily impose hard limits on script execution time, mitigating the impact of malicious or faulty scripts.
+*   **Resource Control:** Easily impose hard limits on script execution time and memory consumption, mitigating the impact of malicious or faulty scripts.
 *   **Ideal for Scripting:** Perfect for integrating small, well-defined calculation or validation scripts. Its safe nature allows trusted users to write scripts without compromising application integrity.
 *   **Zero Native Dependencies:** Unlike traditional approaches that require platform-specific JNI libraries, this library uses WebAssembly and Chicory, eliminating native dependencies at runtime. This simplifies deployment across different environments.
 

@@ -76,6 +76,11 @@ public final class QuickJSRuntime implements AutoCloseable {
     private final ExportFunction closeRuntime;
 
     /**
+     * The native setMemoryLimit funciton
+     */
+    private final ExportFunction setMemoryLimit;
+
+    /**
      * Map of contexts belonging to this runtime.
      */
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
@@ -109,6 +114,7 @@ public final class QuickJSRuntime implements AutoCloseable {
         this.alloc = this.instance.export("alloc");
         this.dealloc = this.instance.export("dealloc");
         this.closeRuntime = this.instance.export("close_runtime_wasm");
+        this.setMemoryLimit = this.instance.export("set_memory_limit_runtime_wasm");
 
         initLogging();
 
@@ -244,6 +250,22 @@ public final class QuickJSRuntime implements AutoCloseable {
             }
             scriptRuntimeLimit = unit.toMillis(limit);
         }
+        return this;
+    }
+
+    /**
+     * Sets the memory limit for JS Scripts. A value of 0 (default) allows for
+     * unlimited memory
+     * 
+     * @param limit memory limit. (Should be at least 10000 bytes, or 0 for
+     *              unlimited memory)
+     * @return this QuickJSRuntime instance for method chaining.
+     */
+    public QuickJSRuntime withScriptMemoryLimit(long limit) {
+        if (limit < 0) {
+            throw new IllegalStateException("Memory limit must not be lower than 0");
+        }
+        this.setMemoryLimit.apply(this.getRuntimePointer(), limit);
         return this;
     }
 
