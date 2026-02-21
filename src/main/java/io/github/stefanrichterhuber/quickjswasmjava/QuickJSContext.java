@@ -1,12 +1,9 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
-import java.io.ByteArrayOutputStream;
 import java.io.IOException;
 import java.lang.reflect.Proxy;
 import java.nio.charset.StandardCharsets;
 import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.function.BiConsumer;
@@ -14,18 +11,12 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
-import java.util.stream.Collectors;
 
 import javax.script.Invocable;
 import javax.script.ScriptException;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
-import org.msgpack.core.MessageFormat;
-import org.msgpack.core.MessagePack;
-import org.msgpack.core.MessagePacker;
-import org.msgpack.core.MessageUnpacker;
-import org.msgpack.value.ValueType;
 
 import com.dylibso.chicory.runtime.ExportFunction;
 import com.dylibso.chicory.runtime.Instance;
@@ -91,7 +82,9 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     /**
      * List of host functions.
      */
-    private final List<Function<List<Object>, Object>> hostFunctions = new ArrayList<>();
+    final List<Function<List<Object>, Object>> hostFunctions = new ArrayList<>();
+
+    private final MessagePackRegistry messagePackRegistry;
 
     /**
      * Creates a new QuickJS context from a existing runtime. Not public, use
@@ -100,6 +93,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param runtime The runtime to create the context in.
      */
     QuickJSContext(final QuickJSRuntime runtime) {
+        this.messagePackRegistry = new MessagePackRegistry(this);
         this.runtime = runtime;
         this.createContext = runtime.getInstance().export("create_context_wasm");
         this.closeContext = runtime.getInstance().export("close_context_wasm");
@@ -133,8 +127,10 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
             throw new RuntimeException("Function not found: " + functionPtr);
         }
 
+        // TODO clean up memory of args necessary?
+        MemoryLocation argsLocation = new MemoryLocation(argPtr, (int) argLen, this.getRuntime());
         try {
-            final Object realArgs = unpackObjectFromMemory(instance, argPtr, argLen);
+            final Object realArgs = unpackObjectFromMemory(argsLocation);
 
             Object result = null;
             if (realArgs instanceof List) {
@@ -484,16 +480,8 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @throws IOException If the object cannot be written to the memory.
      */
     MemoryLocation writeToMemory(Object data) {
-        try {
-            final ByteArrayOutputStream out = new ByteArrayOutputStream();
-            final MessagePacker packer = MessagePack.newDefaultPacker(out);
-            packObject(data, packer);
-            packer.close();
-            final byte[] valueBytes = out.toByteArray();
-            return this.getRuntime().writeToMemory(valueBytes);
-        } catch (IOException e) {
-            throw new RuntimeException("Unable to write object to memory", e);
-        }
+        final byte[] valueBytes = this.messagePackRegistry.pack(data);
+        return this.getRuntime().writeToMemory(valueBytes);
     }
 
     /**
@@ -535,84 +523,6 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     }
 
     /**
-     * Packs an object to a message pack packer.
-     * 
-     * @param obj    The object to pack.
-     * @param packer The message pack packer.
-     * @throws IOException If the object cannot be packed.
-     */
-    @SuppressWarnings("unchecked")
-    void packObject(Object obj, MessagePacker packer) throws IOException {
-        if (obj == null) {
-            packer.packString("null");
-        } else if (obj instanceof Double) {
-            packer.packMapHeader(1);
-            packer.packString("float");
-            packer.packDouble(((Double) obj).doubleValue());
-        } else if (obj instanceof Float) {
-            packObject(((Float) obj).doubleValue(), packer);
-        } else if (obj instanceof Integer) {
-            packer.packMapHeader(1);
-            packer.packString("int");
-            packer.packInt(((Integer) obj).intValue());
-        } else if (obj instanceof Boolean) {
-            packer.packMapHeader(1);
-            packer.packString("boolean");
-            packer.packBoolean(((Boolean) obj).booleanValue());
-        } else if (obj instanceof String) {
-            packer.packMapHeader(1);
-            packer.packString("string");
-            packer.packString((String) obj);
-        } else if (obj instanceof QuickJSArray) {
-            packer.packMapHeader(1);
-            packer.packString("nativeArray");
-            packer.packLong(((QuickJSArray<?>) obj).getArrayPointer());
-        } else if (obj instanceof List) {
-            packer.packMapHeader(1);
-            packer.packString("array");
-            packer.packArrayHeader(((List<?>) obj).size());
-            for (Object item : (List<?>) obj) {
-                packObject(item, packer);
-            }
-        } else if (obj instanceof QuickJSObject) {
-            packer.packMapHeader(1);
-            packer.packString("nativeObject");
-            packer.packLong(((QuickJSObject<?, ?>) obj).getObjectPointer());
-        } else if (obj instanceof Map) {
-            packer.packMapHeader(1);
-            packer.packString("object");
-            packer.packMapHeader(((Map<?, ?>) obj).size());
-            for (Map.Entry<?, ?> entry : ((Map<?, ?>) obj).entrySet()) {
-                packer.packString(entry.getKey().toString());
-                packObject(entry.getValue(), packer);
-            }
-        } else if (obj instanceof QuickJSFunction) {
-            packer.packMapHeader(1);
-            packer.packString("function");
-            packer.packArrayHeader(2);
-            packer.packString(((QuickJSFunction) obj).getName());
-            packer.packLong(((QuickJSFunction) obj).getFunctionPointer());
-        } else if (obj instanceof Function) {
-            packer.packMapHeader(1);
-            packer.packString("javaFunction");
-            packer.packArrayHeader(2);
-            packer.packInt((int) this.getContextPointer());
-            packer.packInt((int) hostFunctions.size());
-            hostFunctions.add((Function<List<Object>, Object>) obj);
-        } else if (obj instanceof Exception) {
-            packer.packMapHeader(1);
-            packer.packString("exception");
-            packer.packArrayHeader(2);
-            packer.packString(((Exception) obj).getMessage());
-            packer.packString(
-                    Arrays.asList(((Exception) obj).getStackTrace()).stream().map(Object::toString)
-                            .collect(Collectors.joining("\n")));
-        } else {
-            throw new RuntimeException("Unsupported type: " + obj.getClass().getName());
-        }
-    }
-
-    /**
      * Unpacks an object from a memory location.
      * 
      * @param memoryLocation The memory location to unpack the object from.
@@ -620,134 +530,9 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @throws IOException If the object cannot be unpacked.
      */
     Object unpackObjectFromMemory(MemoryLocation memoryLocation) {
-        return unpackObjectFromMemory(memoryLocation.runtime().getInstance(), memoryLocation.pointer(),
-                memoryLocation.length());
-    }
-
-    /**
-     * Unpacks an object from memory.
-     * 
-     * @param instance The instance to read the memory from.
-     * @param ptr      The pointer to the memory location.
-     * @param len      The length of the memory location.
-     * @return The unpacked object.
-     * @throws IOException If the object cannot be unpacked.
-     */
-    Object unpackObjectFromMemory(Instance instance, long ptr, long len) {
-        try {
-            final byte[] bytes = instance.memory().readBytes((int) ptr, (int) len);
-            MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(bytes);
-            return unpackObject(unpacker);
-        } catch (IOException e) {
-            throw new RuntimeException("Failed to unpack object from memory", e);
-        }
-    }
-
-    /**
-     * Unpacks an object from a message unpacker.
-     * 
-     * @param unpacker The message unpacker to unpack the object from.
-     * @return The unpacked object.
-     * @throws IOException If the object cannot be unpacked.
-     */
-    Object unpackObject(MessageUnpacker unpacker) throws IOException {
-        // First field is the type
-        final MessageFormat format = unpacker.getNextFormat();
-        final ValueType valueType = format.getValueType();
-
-        if (valueType == ValueType.MAP) {
-            // Should always be 1
-            final int mapSize = unpacker.unpackMapHeader();
-            if (mapSize != 1) {
-                throw new RuntimeException("Expected map size of 1, got " + mapSize);
-            }
-            final String type = unpacker.unpackString();
-            switch (type) {
-                case "string":
-                    return unpacker.unpackString();
-                case "float":
-                    return unpacker.unpackDouble();
-                case "boolean":
-                    return unpacker.unpackBoolean();
-                case "int":
-                    return unpacker.unpackInt();
-                case "array": {
-                    // Deprecated: Impossible to enter, since a nativeArray should always be
-                    // returned
-
-                    int arraySize = unpacker.unpackArrayHeader();
-                    List<Object> array = new ArrayList<>();
-                    for (int i = 0; i < arraySize; i++) {
-                        array.add(unpackObject(unpacker));
-                    }
-                    return array;
-                }
-                case "object":
-                    // Deprecated: Impossible to enter, since a nativeObject should always be
-                    // returned
-
-                    int objectSize = unpacker.unpackMapHeader();
-                    Map<String, Object> object = new HashMap<>();
-                    for (int i = 0; i < objectSize; i++) {
-                        String key = unpacker.unpackString();
-                        object.put(key, unpackObject(unpacker));
-                    }
-                    return object;
-                case "function": {
-                    int arraySize = unpacker.unpackArrayHeader();
-                    if (arraySize != 2) {
-                        throw new RuntimeException("Expected array with 2 element (function name, function ptr)");
-                    }
-                    String functionName = unpacker.unpackString();
-                    long functionPtr = unpacker.unpackLong();
-                    return new QuickJSFunction(this, functionName, functionPtr);
-                }
-                case "javaFunction": {
-                    // Impossible to enter since, one would always get back a 'function', wrapping
-                    // the Java function
-
-                    int arraySize = unpacker.unpackArrayHeader();
-                    if (arraySize != 2) {
-                        throw new RuntimeException("Expected array with 2 element (context ptr, function index)");
-                    }
-                    final int contextPtr = unpacker.unpackInt();
-                    final int functionIndex = unpacker.unpackInt();
-                    if (contextPtr != this.getContextPointer()) {
-                        throw new RuntimeException("Context pointer does not match");
-                    }
-                    return hostFunctions.get(functionIndex);
-                }
-                case "exception": {
-                    int arraySize = unpacker.unpackArrayHeader();
-                    if (arraySize != 2) {
-                        throw new RuntimeException(
-                                "Expected array with 2 element (exception message, exception stack)");
-                    }
-                    String message = unpacker.unpackString();
-                    String stack = unpacker.unpackString();
-                    return new QuickJSException(message, stack);
-                }
-                case "nativeArray": {
-                    long pointer = unpacker.unpackLong();
-                    return new QuickJSArray<>(this, pointer);
-                }
-                case "nativeObject": {
-                    long pointer = unpacker.unpackLong();
-                    return new QuickJSObject<>(this, pointer);
-                }
-                default:
-                    throw new RuntimeException("Unknown type: " + type);
-            }
-        } else if (valueType == ValueType.STRING) {
-            String rawValue = unpacker.unpackString();
-            if (rawValue.equals("null")) {
-                return null;
-            } else if (rawValue.equals("undefined")) {
-                return null;
-            }
-        }
-
-        return null;
+        final byte[] bytes = memoryLocation.runtime().getInstance().memory().readBytes((int) memoryLocation.pointer(),
+                (int) (long) memoryLocation.length());
+        return messagePackRegistry.unpack(bytes);
     }
 
     /**
