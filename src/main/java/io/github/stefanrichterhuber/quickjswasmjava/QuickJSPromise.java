@@ -21,11 +21,11 @@ class QuickJSPromise extends CompletableFuture<Object> {
             final Integer promisePtr = (Integer) r.get("promise_ptr");
 
             this.thenApply(v -> {
-                Object res = resolve.call(v);
+                Object res = resolve.call(this, v);
                 return v;
             });
             this.exceptionally(e -> {
-                reject.call(e);
+                reject.call(this, e);
                 return null;
             });
             this.promisePtr = promisePtr;
