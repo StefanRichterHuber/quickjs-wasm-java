@@ -127,9 +127,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
             throw new RuntimeException("Function not found: " + functionPtr);
         }
 
-        // TODO clean up memory of args necessary?
-        MemoryLocation argsLocation = new MemoryLocation(argPtr, (int) argLen, this.getRuntime());
-        try {
+        try (MemoryLocation argsLocation = new MemoryLocation(argPtr, (int) argLen, this.getRuntime())) {
             final Object realArgs = unpackObjectFromMemory(argsLocation);
 
             Object result = null;
