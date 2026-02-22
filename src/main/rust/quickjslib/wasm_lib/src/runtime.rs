@@ -28,3 +28,9 @@ pub fn close_runtime(runtime: Box<Runtime>) {
     debug!("Closing QuickJS runtime");
     drop(runtime);
 }
+
+#[wasm_export]
+pub fn set_memory_limit_runtime(runtime: &Runtime, limit: u64) {
+    debug!("Setting QuickJSRuntime memory limit to {} bytes", limit);
+    runtime.set_memory_limit(limit as usize);
+}

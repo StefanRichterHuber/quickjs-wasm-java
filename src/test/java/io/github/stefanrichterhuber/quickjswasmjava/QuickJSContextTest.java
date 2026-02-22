@@ -523,6 +523,26 @@ public class QuickJSContextTest {
     }
 
     /**
+     * The memory consumption of scripts can be limited by the runtime object to
+     * prevent faulty scripts to overload the host
+     */
+    @Test
+    public void testScriptMemoryLimit() throws Exception {
+        try (@SuppressWarnings("resource")
+        QuickJSRuntime runtime = new QuickJSRuntime().withScriptMemoryLimit(10000);
+                QuickJSContext context = runtime.createContext()) {
+
+            try {
+                context.eval(
+                        "const memoryHog = [];\nconst chunk = \"M_E_M_O_R_Y_\".repeat(100000);\nwhile (true) {memoryHog.push(chunk); }");
+            } catch (QuickJSException e) {
+                assertEquals("out of memory", e.getMessage());
+            }
+        }
+
+    }
+
+    /**
      * JS exceptions thrown in the script are wrapped as QuickJSException
      * 
      * @throws Exception

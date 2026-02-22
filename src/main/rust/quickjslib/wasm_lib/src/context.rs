@@ -80,12 +80,12 @@ pub fn set_global(
 ) -> rquickjs::Result<JSJavaProxy> {
     debug!("Setting global: {} = {:?}", name, value);
     let global = ctx.globals();
-    global.set(name, value)?;
+    global.set(name.clone(), value)?;
     Ok(JSJavaProxy::Null)
 }
 
 #[wasm_export]
 pub fn get_global(ctx: &Ctx<'_>, name: String) -> rquickjs::Result<JSJavaProxy> {
     let global = ctx.globals();
-    global.get(name)?
+    global.get(name.clone())?
 }

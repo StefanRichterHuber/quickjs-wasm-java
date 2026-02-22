@@ -62,6 +62,7 @@ impl<'js> FromAtom<'js> for JSJavaProxy {
 
 impl<'js> IntoAtom<'js> for JSJavaProxy {
     fn into_atom(self, ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<Atom<'js>> {
+        debug!("Calling into_atom(...) on JSJavaProxy");
         match self {
             JSJavaProxy::String(value) => Atom::from_str(ctx.clone(), value.as_str()),
             JSJavaProxy::Int(value) => Atom::from_i32(ctx.clone(), value),
@@ -74,6 +75,7 @@ impl<'js> IntoAtom<'js> for JSJavaProxy {
 
 impl<'js> IntoJs<'js> for JSJavaProxy {
     fn into_js(self, ctx: &rquickjs::Ctx<'js>) -> rquickjs::Result<Value<'js>> {
+        debug!("Calling into_js(...) on JSJavaProxy");
         let result = match self {
             JSJavaProxy::Null => Ok(Value::new_null(ctx.clone())),
             JSJavaProxy::Undefined => Ok(Value::new_undefined(ctx.clone())),
