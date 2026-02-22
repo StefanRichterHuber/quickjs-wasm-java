@@ -5,6 +5,11 @@ import java.util.concurrent.CompletableFuture;
 
 import com.dylibso.chicory.runtime.ExportFunction;
 
+/**
+ * A native wrapper around a QuickJS promise objects. It extends
+ * CompletableFuture to provide a Java
+ * interface to the promise.
+ */
 class QuickJSPromise extends CompletableFuture<Object> {
     private final long promisePtr;
     private final QuickJSContext context;
@@ -20,14 +25,16 @@ class QuickJSPromise extends CompletableFuture<Object> {
             final QuickJSFunction reject = (QuickJSFunction) r.get("reject");
             final Integer promisePtr = (Integer) r.get("promise_ptr");
 
-            this.thenApply(v -> {
-                Object res = resolve.call(this, v);
-                return v;
-            });
-            this.exceptionally(e -> {
-                reject.call(this, e);
-                return null;
-            });
+            // FIXME: When this future is completeed by a native promise it should not call
+            // resolve or reject
+            // this.thenApply(v -> {
+            // Object res = resolve.call(this, v);
+            // return v;
+            // });
+            // this.exceptionally(e -> {
+            // reject.call(this, e);
+            // return null;
+            // });
             this.promisePtr = promisePtr;
         }
     }

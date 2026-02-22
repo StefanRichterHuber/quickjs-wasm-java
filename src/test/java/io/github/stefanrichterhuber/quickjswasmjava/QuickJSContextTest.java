@@ -8,7 +8,6 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
-import java.time.Duration;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -681,6 +680,7 @@ public class QuickJSContextTest {
             CompletableFuture<Object> r1 = context.evalAsync("await \"Classic resolve\" ");
 
             assertNotNull(r1);
+            assertFalse(r1.isDone());
             while (context.poll()) {
                 Thread.sleep(10);
             }
@@ -697,6 +697,7 @@ public class QuickJSContextTest {
             CompletableFuture<Object> r1 = context.evalAsync("throw Err('hello') ");
 
             assertNotNull(r1);
+            assertFalse(r1.isDone());
             while (context.poll()) {
                 Thread.sleep(10);
             }
