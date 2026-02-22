@@ -241,7 +241,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     }
 
     /**
-     * Centralized result handling
+     * Centralized result handling of native calls with an message packed result
      */
     Object handleNativeResult(long[] result) {
         try (MemoryLocation resLoc = MemoryLocation.unpack(result[0], runtime)) {
@@ -276,16 +276,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);
                 ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
             long[] result = evalAsync.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
-            // Read the result with messagepack java, it is a pointer and a length to a
-            // message pack object
-            try (final MemoryLocation resultLocation = MemoryLocation.unpack(result[0], runtime)) {
-                final Object r = unpackObjectFromMemory(resultLocation);
-                if (r instanceof RuntimeException) {
-                    throw (RuntimeException) r;
-                }
-
-                return (CompletableFuture<Object>) r;
-            }
+            return (CompletableFuture<Object>) handleNativeResult(result);
         }
     }
 
