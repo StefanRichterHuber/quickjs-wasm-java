@@ -38,6 +38,12 @@ To build the project, you need:
     rustup target add wasm32-wasip1
     ```
 
+Optionally one can use `wasm-opt` to further optimize the build. Install it using:
+
+```bash
+cargo install wasm-opt
+```
+
 ### Building the Project
 
 The project uses Maven and is pre-configured to build the WebAssembly library using the `exec-maven-plugin`.
@@ -47,6 +53,12 @@ The project uses Maven and is pre-configured to build the WebAssembly library us
     ```bash
     mvn -P release clean install
     ```
+
+    If `wasm-opt` is available, you can invoke it during the build using the `wasm-opt` profile
+    ```bash
+    mvn -P release,wasm-opt clean install
+    ```
+
     The `chicory-compiler-maven-plugin` then compiles the Wasm bytecode to native code. This approach offers superior performance compared to interpreter mode, faster startup times, and fewer dependencies than Chicory's runtime compiler, making it ideal for GraalVM native images.
 
 

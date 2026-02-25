@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.stefanrichterhuber</groupId>
@@ -38,6 +40,8 @@
         <cargo.profile>dev</cargo.profile>
         <cargo.profile.folder>debug</cargo.profile.folder>
         <cargo.target>wasm32-wasip1</cargo.target>
+        <wasm.file>
+            ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.wasm</wasm.file>
 
         <chicory.interpreterFallback>WARN</chicory.interpreterFallback>
 
@@ -156,7 +160,7 @@
                         <goals>
                             <goal>exec</goal>
                         </goals>
-                        <phase>generate-sources</phase>
+                        <phase>initialize</phase>
                         <configuration>
                             <executable>cargo</executable>
                             <workingDirectory>${project.basedir}/src/main/rust/quickjslib/wasm_lib</workingDirectory>
@@ -185,7 +189,7 @@
                 <executions>
                     <execution>
                         <id>compiler-gen</id>
-                        <phase>generate-sources</phase>
+                        <phase>process-sources</phase>
                         <goals>
                             <goal>compile</goal>
                         </goals>
@@ -194,8 +198,7 @@
                             release -->
                             <interpreterFallback>${chicory.interpreterFallback}</interpreterFallback>
                             <!-- Translate the Wasm binary into bytecode -->
-                            <wasmFile>
-                                ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.wasm</wasmFile>
+                            <wasmFile>${wasm.file}</wasmFile>
                             <!-- Name of the generated class to be used -->
                             <name>io.github.stefanrichterhuber.quickjswasmjava.WasmLib</name>
                         </configuration>
@@ -310,6 +313,38 @@
                         <configuration>
                             <tagNameFormat>v@{project.version}</tagNameFormat>
                         </configuration>
+                    </plugin>
+                </plugins>
+            </build>
+        </profile>
+
+        <!-- Additional optional profile to invoke wasm-opt on the generated wasm file-->
+        <profile>
+            <id>wasm-opt</id>
+            <build>
+                <plugins>
+                    <plugin>
+                        <groupId>org.codehaus.mojo</groupId>
+                        <artifactId>exec-maven-plugin</artifactId>
+                        <version>3.2.0</version>
+                        <executions>
+                            <execution>
+                                <id>optimize wasm</id>
+                                <goals>
+                                    <goal>exec</goal>
+                                </goals>
+                                <phase>generate-sources</phase>
+                                <configuration>
+                                    <executable>wasm-opt</executable>
+                                    <arguments>
+                                        <argument>-O4</argument>
+                                        <argument>${wasm.file}</argument>
+                                        <argument>-o</argument>
+                                        <argument>${wasm.file}</argument>
+                                    </arguments>
+                                </configuration>
+                            </execution>
+                        </executions>
                     </plugin>
                 </plugins>
             </build>
