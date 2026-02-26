@@ -14,13 +14,14 @@ use rquickjs::IntoAtom;
 use rquickjs::IntoJs;
 use rquickjs::Object;
 use rquickjs::Persistent;
-use rquickjs::Promise;
 use rquickjs::Value;
 use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::completable_future;
 use crate::completable_future::convert_promise;
+use crate::completable_future::PromiseContainer;
 use crate::quickjs_function::call_java_function;
 
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
@@ -130,9 +131,16 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 Ok(object.into_value())
             }
             JSJavaProxy::CompletableFuture(future_ptr, promise_ptr) => {
-                let promise = unsafe { &*(promise_ptr as *mut Persistent<Promise>) };
-                let restored_promise = promise.clone().restore(ctx)?;
-                restored_promise.set("__completable_future_ptr", future_ptr)?;
+                let container = unsafe { &*(promise_ptr as *mut PromiseContainer) };
+                let restored_promise = container.promise.clone().restore(ctx)?;
+                restored_promise.set(
+                    completable_future::JAVA_COMPLETABLE_FUTURE_PTR_FIELD,
+                    future_ptr,
+                )?;
+                restored_promise.set(
+                    completable_future::JS_PROMISE_CONTAINER_PTR_FIELD,
+                    promise_ptr,
+                )?;
                 Ok(restored_promise.into_value())
             }
         };

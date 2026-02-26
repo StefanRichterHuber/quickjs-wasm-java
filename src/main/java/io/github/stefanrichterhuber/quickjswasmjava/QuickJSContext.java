@@ -168,10 +168,9 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * Creates a new completable future and returns its index. Used to wrap native
      * promises.
      */
-    long[] createCompletableFutureHostFunction(Instance instance) {
-        final CompletableFuture<Object> completableFuture = new CompletableFuture<>();
-        this.completableFutures.add(completableFuture);
-        return new long[] { this.completableFutures.size() - 1 };
+    long[] createCompletableFutureHostFunction(Instance instance, long promise_ptr) {
+        final QuickJSPromise completableFuture = new QuickJSPromise(this, promise_ptr);
+        return new long[] { completableFuture.getCompletableFuturePointer() };
     }
 
     /**
@@ -186,13 +185,26 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
         try (MemoryLocation arg = new MemoryLocation(argPtr, argLen, this.getRuntime())) {
             final Object r = unpackObjectFromMemory(arg);
+            LOGGER.debug("Completing future from js promise with value {}", r);
             if (r instanceof Exception) {
-                f.completeExceptionally((Exception) r);
+                if (r instanceof QuickJSException) {
+                    ((QuickJSPromise) f).completeExceptionallyByJS((QuickJSException) r);
+                } else {
+                    f.completeExceptionally((Exception) r);
+                }
             } else {
                 if (reject == 1) {
-                    f.completeExceptionally(new QuickJSException("Promise rejected", null));
+                    if (f instanceof QuickJSPromise) {
+                        ((QuickJSPromise) f).completeExceptionallyByJS(new QuickJSException("Promise rejected", null));
+                    } else {
+                        f.completeExceptionally(new QuickJSException("Promise rejected", null));
+                    }
                 } else {
-                    f.complete(r);
+                    if (f instanceof QuickJSPromise) {
+                        ((QuickJSPromise) f).completeByJS(r);
+                    } else {
+                        f.complete(r);
+                    }
                 }
             }
         }

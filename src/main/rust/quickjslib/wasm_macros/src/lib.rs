@@ -44,6 +44,13 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
                 conversions.push(quote! {
                     let #arg_name = unsafe { &*(#arg_name as *mut Context) };
                 });
+            } else if type_str == "& PromiseContainer" {
+                wrapper_args.push(quote!(#arg_name: u64));
+                call_args.push(quote!(&#arg_name));
+
+                conversions.push(quote! {
+                    let #arg_name = unsafe { &*(#arg_name as *mut PromiseContainer) };
+                });
             } else if type_str == "& Ctx < '_ >" {
                 wrapper_args.push(quote!(#arg_name: u64));
                 let context_name = format_ident!("{}_context", arg_name);

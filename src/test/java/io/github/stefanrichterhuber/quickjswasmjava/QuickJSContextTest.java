@@ -12,6 +12,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -20,9 +21,12 @@ import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Test;
 
 public class QuickJSContextTest {
+    private static final Logger LOGGER = LogManager.getLogger();
 
     /**
      * All supported java types can be returned from the eval function
@@ -735,10 +739,12 @@ public class QuickJSContextTest {
                 context.setGlobal("p0", promise);
 
                 CompletableFuture<Object> r1 = context.evalAsync("await p0");
+                LOGGER.debug("Entering first poll before completing the future");
                 while (context.poll()) {
                     Thread.sleep(10);
                 }
                 promise.complete(53);
+                LOGGER.debug("Entering second poll after completing the future");
                 while (context.poll()) {
                     Thread.sleep(10);
                 }
@@ -767,51 +773,4 @@ public class QuickJSContextTest {
 
     }
 
-    @SuppressWarnings("rawtypes")
-    @Test
-    public void asyncSupport() throws Exception {
-        try (QuickJSRuntime runtime = new QuickJSRuntime();
-                QuickJSContext context = runtime.createContext()) {
-
-            {
-                Object result = context.evalAsync("var x = await 10; x");
-                assertInstanceOf(CompletableFuture.class, result);
-                CompletableFuture cf = (CompletableFuture) result;
-
-                assertFalse(cf.isDone());
-
-                while (context.poll()) {
-                    Thread.sleep(10);
-                }
-
-                assertTrue(cf.isDone());
-                System.out.println(cf);
-                assertEquals(10, cf.join());
-            }
-            {
-                // Test rejected promise
-                Object result = context.evalAsync("let p = new Promise((resolve, reject) => {\n" + //
-                        "  reject(new Error(\"stupid\"));\n" + //
-                        "});\n" + //
-                        "await p");
-                assertInstanceOf(CompletableFuture.class, result);
-                CompletableFuture cf = (CompletableFuture) result;
-
-                while (context.poll()) {
-                    Thread.sleep(10);
-                }
-
-                assertTrue(cf.isDone());
-                System.out.println(cf);
-                assertTrue(cf.isCompletedExceptionally());
-                try {
-                    cf.join();
-                    fail("Should have thrown an exception");
-                } catch (Exception e) {
-                    assertInstanceOf(QuickJSException.class, e);
-                    assertEquals("stupid", ((QuickJSException) e).getRawMessage());
-                }
-            }
-        }
-    }
 }

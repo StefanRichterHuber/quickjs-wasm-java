@@ -223,11 +223,21 @@ class MessagePackRegistry {
 
         register("completableFuture", List.of(CompletableFuture.class), new TypeHandler() {
             public void pack(Object o, MessagePacker p) throws IOException {
-                p.packArrayHeader(2);
+                // First check if this is an already registred completable future
+                int index = MessagePackRegistry.this.ctx.completableFutures.indexOf(o);
+                if (index == -1) {
+                    MessagePackRegistry.this.ctx.completableFutures.add((CompletableFuture<Object>) o);
+                    index = MessagePackRegistry.this.ctx.completableFutures.size() - 1;
+                }
 
-                MessagePackRegistry.this.ctx.completableFutures.add((CompletableFuture<Object>) o);
-                p.packInt(MessagePackRegistry.this.ctx.completableFutures.size() - 1);
-                p.packLong(0l);
+                // Then check for a promise pointer -> available if it is a QuickJSPromise
+                long promisePtr = 0l;
+                if (o instanceof QuickJSPromise) {
+                    promisePtr = ((QuickJSPromise) o).getPromisePointer();
+                }
+                p.packArrayHeader(2);
+                p.packInt(index);
+                p.packLong(promisePtr);
             }
 
             public Object unpack(MessageUnpacker u) throws IOException {

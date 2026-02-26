@@ -1,20 +1,24 @@
-use std::collections::HashMap;
-
 use log::debug;
 use rquickjs::{
     function::{IntoJsFunc, ParamRequirement},
     prelude::This,
     promise::PromiseState,
     runtime::UserDataGuard,
-    Context, Function, IntoJs, Persistent, Promise, Value,
+    Context, Ctx, Function, IntoJs, Persistent, Promise, Value,
 };
 use wasm_macros::wasm_export;
 
 use crate::{context::ContextPtr, js_to_java_proxy::JSJavaProxy};
 
+/**
+ * In this private field in any promise, we store a reference to the corresponding java completable future
+ */
+pub static JAVA_COMPLETABLE_FUTURE_PTR_FIELD: &str = "__completable_future_ptr";
+pub static JS_PROMISE_CONTAINER_PTR_FIELD: &str = "___js_promise_container_ptr";
+
 #[link(wasm_import_module = "env")]
 extern "C" {
-    pub fn create_completable_future(context_ptr: u64) -> i64;
+    pub fn create_completable_future(context_ptr: u64, promise_ptr: u64) -> i64;
 }
 
 #[link(wasm_import_module = "env")]
@@ -28,53 +32,102 @@ extern "C" {
     ) -> i64;
 }
 
+pub struct PromiseContainer {
+    pub promise: Persistent<Promise<'static>>,
+    pub resolve: Option<Persistent<Function<'static>>>,
+    pub reject: Option<Persistent<Function<'static>>>,
+}
+
+impl PromiseContainer {
+    pub(crate) fn new<'js>(
+        ctx: &Ctx<'js>,
+        promise: Promise<'js>,
+        resolve: Option<Function<'js>>,
+        reject: Option<Function<'js>>,
+    ) -> Self {
+        let promise = Persistent::save(ctx, promise);
+        let resolve = resolve.map(|f| Persistent::save(ctx, f));
+        let reject = reject.map(|f| Persistent::save(ctx, f));
+
+        PromiseContainer {
+            promise,
+            resolve,
+            reject,
+        }
+    }
+
+    pub(crate) fn resolve<'js>(&self, ctx: &Ctx<'js>, value: JSJavaProxy) -> rquickjs::Result<()> {
+        let promise = Persistent::restore(self.promise.clone(), ctx)?;
+        let resolve = Persistent::restore(self.resolve.clone().unwrap(), ctx)?;
+        debug!("Calling resolve with value from java completable future");
+        let _result: JSJavaProxy = resolve.call((This(promise), value))?;
+        debug!("Successfully called resolve with value from java completable future");
+
+        Ok(())
+    }
+
+    pub(crate) fn reject<'js>(&self, ctx: &Ctx<'js>, value: JSJavaProxy) -> rquickjs::Result<()> {
+        let promise = Persistent::restore(self.promise.clone(), ctx)?;
+        let reject = Persistent::restore(self.reject.clone().unwrap(), ctx)?;
+        debug!("Calling reject with value from java completable future");
+        let _result: JSJavaProxy = reject.call((This(promise), value))?;
+        debug!("Successfully called reject with value from java completable future");
+
+        Ok(())
+    }
+}
+
 #[wasm_export]
-pub fn promise_create(context: &Context) -> JSJavaProxy {
-    let map = context.with(|ctx| {
+pub fn promise_resolve(
+    ctx: &Ctx<'_>,
+    cf: &PromiseContainer,
+    value: JSJavaProxy,
+) -> rquickjs::Result<bool> {
+    cf.resolve(ctx, value)?;
+    Ok(true)
+}
+
+#[wasm_export]
+pub fn promise_reject(
+    ctx: &Ctx<'_>,
+    cf: &PromiseContainer,
+    value: JSJavaProxy,
+) -> rquickjs::Result<bool> {
+    cf.reject(ctx, value)?;
+    Ok(true)
+}
+
+#[wasm_export]
+pub fn promise_create(context: &Context, cf_ptr: i32) -> Box<PromiseContainer> {
+    let result = context.with(|ctx| {
         let (promise, resolve, reject) = ctx.promise().unwrap();
 
-        let persistent = Persistent::save(&ctx, promise);
-        let persistent = Box::new(persistent);
-        let promise_ptr = Box::into_raw(persistent);
-        let mut map = HashMap::new();
-
-        // TODO how to handle This reference here?
-        map.insert(
-            "promise_ptr".to_string(),
-            JSJavaProxy::convert(Value::new_int(ctx, promise_ptr as i32)).unwrap(),
-        );
-        map.insert(
-            "resolve".to_string(),
-            JSJavaProxy::convert(resolve.into_value()).unwrap(),
-        );
-        map.insert(
-            "reject".to_string(),
-            JSJavaProxy::convert(reject.into_value()).unwrap(),
-        );
-        map
+        promise
+            .set(JAVA_COMPLETABLE_FUTURE_PTR_FIELD, cf_ptr)
+            .unwrap();
+        let cf = Box::new(PromiseContainer::new(
+            &ctx,
+            promise,
+            Some(resolve),
+            Some(reject),
+        ));
+        cf
     });
 
-    JSJavaProxy::Object(map)
+    result
 }
 
 pub struct JavaPromise {
     context_ptr: u64,
     completable_future_ptr: i32,
-    persistent_promise_ptr: u64,
     reject: bool,
 }
 
 impl JavaPromise {
-    pub fn new(
-        context_ptr: u64,
-        completable_future_ptr: i32,
-        persistent_promise_ptr: u64,
-        reject: bool,
-    ) -> Self {
+    pub fn new(context_ptr: u64, completable_future_ptr: i32, reject: bool) -> Self {
         Self {
             context_ptr,
             completable_future_ptr,
-            persistent_promise_ptr,
             reject,
         }
     }
@@ -164,44 +217,62 @@ pub(crate) fn convert_promise<'js>(promise: Promise<'js>) -> rquickjs::Result<JS
     let ctx = promise.ctx().clone();
 
     // Restore the context pointer, hopefully found in the ctx
+    debug!("Trying to restore context pointer from context");
+
     let ctx_pointer: UserDataGuard<ContextPtr> = ctx.userdata().unwrap();
 
     debug!("Found context pointer {}", ctx_pointer.ptr);
 
-    // Call then func with callback to completablefutures
-    // TODO: create promise on java side, get pointer to it
-    // First check if this promise already references a completable future
-    let completable_future_ptr = if let Ok(ptr) = promise.get("__completable_future_ptr") {
+    let promise_ptr: u64 = if let Ok(ptr) = promise.get(JS_PROMISE_CONTAINER_PTR_FIELD) {
         debug!(
-            "Retrieved CompletableFuture pointer {} from field {}",
-            ptr, "__completable_future_ptr"
+            "Retrieved pointer to JS Promise container {} from field {}",
+            ptr, JS_PROMISE_CONTAINER_PTR_FIELD
         );
         ptr
     } else {
-        // Create new completablefuture and save pointer to it in the promise
-        let completable_future_ptr = unsafe { create_completable_future(ctx_pointer.ptr) };
+        let promise_container = PromiseContainer::new(&ctx, promise.clone(), None, None);
+        let promise_ptr = Box::into_raw(Box::new(promise_container)) as u64;
+
+        promise.set(JS_PROMISE_CONTAINER_PTR_FIELD, promise_ptr)?;
         debug!(
-            "Generated new CompletableFuture pointer {}",
-            completable_future_ptr
+            "Generated new to JS Promise container {} and saved to field {}",
+            promise_ptr, JS_PROMISE_CONTAINER_PTR_FIELD
         );
 
-        promise.set("__completable_future_ptr", completable_future_ptr)?;
-        completable_future_ptr
+        promise_ptr
     };
 
-    let persistent_promise = Persistent::save(&ctx, promise.clone());
-    let persistent_promise_ptr = Box::into_raw(Box::new(persistent_promise.clone())) as u64;
+    // Call then func with callback to completablefutures
+    // TODO: create promise on java side, get pointer to it
+    // First check if this promise already references a completable future
+    let completable_future_ptr: i32 =
+        if let Ok(ptr) = promise.get(JAVA_COMPLETABLE_FUTURE_PTR_FIELD) {
+            debug!(
+                "Retrieved CompletableFuture pointer {} from field {}",
+                ptr, JAVA_COMPLETABLE_FUTURE_PTR_FIELD
+            );
+            ptr
+        } else {
+            // Create new completablefuture and save pointer to it in the promise
+            let completable_future_ptr =
+                unsafe { create_completable_future(ctx_pointer.ptr, promise_ptr) };
+            debug!(
+                "Generated new CompletableFuture pointer {}",
+                completable_future_ptr
+            );
+
+            promise.set(JAVA_COMPLETABLE_FUTURE_PTR_FIELD, completable_future_ptr)?;
+            completable_future_ptr as i32
+        };
 
     let completable_future_complete = JavaPromise::new(
         ctx_pointer.ptr,
         completable_future_ptr.try_into().unwrap(),
-        persistent_promise_ptr,
         false,
     );
     let completable_future_reject = JavaPromise::new(
         ctx_pointer.ptr,
         completable_future_ptr.try_into().unwrap(),
-        persistent_promise_ptr,
         true,
     );
 
@@ -230,23 +301,6 @@ pub(crate) fn convert_promise<'js>(promise: Promise<'js>) -> rquickjs::Result<JS
 
     return Ok(JSJavaProxy::CompletableFuture(
         completable_future_ptr.try_into().unwrap(),
-        persistent_promise_ptr,
+        promise_ptr,
     ));
-}
-
-#[cfg(test)]
-mod tests {
-    use rquickjs::{Context, Function, Runtime};
-
-    use super::*;
-
-    #[test]
-    fn test_async() {
-        let rt = Runtime::new().unwrap();
-        let context = Context::full(&rt).unwrap();
-
-        context.with(|ctx| {
-            let promise = ctx.eval_promise("source");
-        });
-    }
 }

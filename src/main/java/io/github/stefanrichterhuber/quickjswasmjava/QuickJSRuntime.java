@@ -1,11 +1,9 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.nio.charset.StandardCharsets;
-import java.util.ArrayList;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.Level;
@@ -199,7 +197,7 @@ public final class QuickJSRuntime implements AutoCloseable {
                 "env",
                 "create_completable_future",
                 FunctionType.of(
-                        List.of(ValType.I64),
+                        List.of(ValType.I64, ValType.I64),
                         List.of(ValType.I64)),
                 this::createCompletableFutureHostFunction);
 
@@ -241,11 +239,12 @@ public final class QuickJSRuntime implements AutoCloseable {
      */
     private long[] createCompletableFutureHostFunction(Instance instance, long... args) {
         long contextPtr = args[0];
+        long promisePtr = args[1];
         final QuickJSContext context = contexts.get(contextPtr);
         if (context == null) {
             throw new RuntimeException("Context not found: " + contextPtr);
         }
-        return context.createCompletableFutureHostFunction(instance);
+        return context.createCompletableFutureHostFunction(instance, promisePtr);
     }
 
     private long[] completeCompletableFutureHostFunction(Instance instance, long... args) {
