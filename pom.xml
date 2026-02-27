@@ -40,9 +40,12 @@
         <cargo.profile>dev</cargo.profile>
         <cargo.profile.folder>debug</cargo.profile.folder>
         <cargo.target>wasm32-wasip1</cargo.target>
+        <!-- Contains the wasm file after building before optimization -->
         <wasm.file>
             ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.wasm</wasm.file>
-
+        <!-- Contains the wasm file after optimization (same as wasm.file for dev profile) -->
+        <wasm.optimized.file>${wasm.file}</wasm.optimized.file>
+        <!-- Chicory interpreter fallback level. Necessary for dev profile -->
         <chicory.interpreterFallback>WARN</chicory.interpreterFallback>
     </properties>
 
@@ -195,7 +198,7 @@
                             release -->
                             <interpreterFallback>${chicory.interpreterFallback}</interpreterFallback>
                             <!-- Translate the Wasm binary into bytecode -->
-                            <wasmFile>${wasm.file}</wasmFile>
+                            <wasmFile>${wasm.optimized.file}</wasmFile>
                             <!-- Name of the generated class to be used -->
                             <name>io.github.stefanrichterhuber.quickjswasmjava.WasmLib</name>
                         </configuration>
@@ -319,6 +322,10 @@
         20% of the file size for release builds-->
         <profile>
             <id>wasm-opt</id>
+            <properties>
+                <wasm.optimized.file>
+                    ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.opt.wasm</wasm.optimized.file>
+            </properties>
             <build>
                 <plugins>
                     <plugin>
@@ -338,7 +345,7 @@
                                         <argument>-O4</argument>
                                         <argument>${wasm.file}</argument>
                                         <argument>-o</argument>
-                                        <argument>${wasm.file}</argument>
+                                        <argument>${wasm.optimized.file}</argument>
                                     </arguments>
                                 </configuration>
                             </execution>
