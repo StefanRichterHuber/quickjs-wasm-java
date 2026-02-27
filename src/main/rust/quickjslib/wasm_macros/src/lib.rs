@@ -109,7 +109,10 @@ pub fn wasm_export(_attr: TokenStream, item: TokenStream) -> TokenStream {
 
                 if type_str == "String" {
                     conversions.push(quote! {
-                        let #arg_name = unsafe { String::from_raw_parts(#ptr_name, #len_name, #len_name) };
+                        let #arg_name = unsafe {
+                            let slice = std::slice::from_raw_parts(#ptr_name, #len_name);
+                            String::from_utf8_lossy(slice).into_owned()
+                        };
                     });
                 } else {
                     conversions.push(quote! {

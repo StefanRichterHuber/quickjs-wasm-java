@@ -372,16 +372,6 @@ public final class QuickJSRuntime implements AutoCloseable {
     }
 
     /**
-     * Writes the given string to memory and returns the memory location of the data
-     * 
-     * @param data the string to write
-     * @return the memory location of the data
-     */
-    MemoryLocation writeToMemory(String data) {
-        return writeToMemory(data.getBytes(StandardCharsets.UTF_8));
-    }
-
-    /**
      * Allocates memory
      * 
      * @param size the size of the memory to allocate

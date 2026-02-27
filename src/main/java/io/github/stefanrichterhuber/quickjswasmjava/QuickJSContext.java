@@ -77,7 +77,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * List of resources that are dependent on this context. If this context is
      * closed, all dependent resources will be closed too.
      */
-    private final List<AutoCloseable> dependendResources = new ArrayList<>();
+    private final List<AutoCloseable> dependentResources = new ArrayList<>();
 
     /**
      * List of host functions.
@@ -105,8 +105,17 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
     }
 
-    void addDependendResource(AutoCloseable resource) {
-        dependendResources.add(resource);
+    /**
+     * Adds a resource depending on this context and needs to be closed before this
+     * context closes
+     * 
+     * @param resource Resource to close
+     */
+    void addDependentResource(AutoCloseable resource) {
+        if (resource == null) {
+            throw new IllegalArgumentException("Resource to close must not be null");
+        }
+        dependentResources.add(resource);
     }
 
     /**
@@ -224,7 +233,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
 
         LOGGER.debug("Setting global: {} = {}", name, value);
 
-        try (final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name);
+        try (final MemoryLocation nameLocation = writeStringToMemory(name);
                 final MemoryLocation valueLocation = this.writeToMemory(value)) {
             // Then call the set global function
             final long[] result = setGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length(),
@@ -254,7 +263,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     public Object getGlobal(String name) {
         LOGGER.debug("Getting global: {}", name);
 
-        try (final MemoryLocation nameLocation = this.getRuntime().writeToMemory(name)) {
+        try (final MemoryLocation nameLocation = writeStringToMemory(name)) {
             final long[] result = getGlobal.apply(contextPtr, nameLocation.pointer(), nameLocation.length());
             return handleNativeResult(result);
         }
@@ -486,13 +495,11 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @return The memory location of the string.
      */
     MemoryLocation writeStringToMemory(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("string value to write to the memory must not be null");
+        }
         final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
-        final int valueBytesLen = valueBytes.length;
-
-        final long valuePtr = runtime.alloc(valueBytesLen);
-        runtime.getInstance().memory().writeString((int) valuePtr, value, StandardCharsets.UTF_8);
-
-        return new MemoryLocation(valuePtr, valueBytesLen, runtime);
+        return this.getRuntime().writeToMemory(valueBytes);
     }
 
     /**
@@ -534,13 +541,14 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      */
     @Override
     public void close() throws Exception {
+        LOGGER.debug("Start closing QuickJSContext");
         if (contextPtr == 0) {
             return;
         }
-        for (var resource : dependendResources) {
+        for (var resource : dependentResources) {
             resource.close();
         }
-        dependendResources.clear();
+        dependentResources.clear();
         hostFunctions.clear();
 
         try {
@@ -550,5 +558,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
             LOGGER.warn("Error closing QuickJS context", e);
         }
         contextPtr = 0;
+        LOGGER.debug("Successfully closed QuickJSContext");
+
     }
 }

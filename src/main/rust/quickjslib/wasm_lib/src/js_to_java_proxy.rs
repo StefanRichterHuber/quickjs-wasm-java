@@ -1,8 +1,6 @@
 use log::debug;
 use log::error;
 use rquickjs::function::Args;
-use rquickjs::function::IntoJsFunc;
-use rquickjs::function::ParamRequirement;
 use rquickjs::prelude::IntoArgs;
 use rquickjs::Array;
 use rquickjs::Atom;
@@ -18,8 +16,10 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
-use crate::quickjs_function::call_java_function;
+use crate::quickjs_function::JavaFunction;
 
+/// This the central conversion point between JS types and java types. It implements FromJs, IntoJs, FromAtom and IntoAtom as well as IntoArgs.
+/// This way it can be both argument as well as result of all rquickjs calls. Its also serializable with serde (and message pack) so it can be transfered to / from the java host context.
 #[derive(Serialize, Deserialize, Debug, PartialEq)]
 #[serde(rename_all = "camelCase")]
 pub enum JSJavaProxy {
@@ -29,6 +29,7 @@ pub enum JSJavaProxy {
     Int(i32),
     Float(f64),
     Boolean(bool),
+    /// Fields: Vec of JSJavaProxy
     Array(Vec<JSJavaProxy>),
     /// Fields: Array Pointer
     NativeArray(u64),
@@ -194,7 +195,6 @@ impl JSJavaProxy {
             return Ok(JSJavaProxy::Exception(message, stacktrace));
         } else if value.is_array() {
             debug!("Converting js array to java array");
-            // create reference to array instead of copying by values
             let array = value.into_array().unwrap();
             let ctx = array.ctx().clone();
 
@@ -202,15 +202,8 @@ impl JSJavaProxy {
             let persistent_array_ptr = Box::into_raw(Box::new(persistent_array)) as u64;
             debug!("Created pointer to native array: {}", persistent_array_ptr);
             return Ok(JSJavaProxy::NativeArray(persistent_array_ptr));
-
-            // let mut vec = Vec::new();
-            // for i in 0..array.len() {
-            //     vec.push(JSJavaProxy::convert(&array.get(i)?)?);
-            // }
-            // return Ok(JSJavaProxy::Array(vec));
         } else if value.is_object() {
             debug!("Converting js object to java map");
-            // TODO create reference to object instead of copying
             let object = value.into_object().unwrap();
             let ctx = object.ctx().clone();
 
@@ -221,23 +214,6 @@ impl JSJavaProxy {
                 persistent_object_ptr
             );
             return Ok(JSJavaProxy::NativeObject(persistent_object_ptr));
-
-            // let mut map = HashMap::new();
-
-            // for key in object.keys().into_iter() {
-            //     let key_value: JSJavaProxy = key?;
-            //     let key_string = match key_value {
-            //         JSJavaProxy::String(s) => s,
-            //         _ => panic!("Key is not a string"),
-            //     };
-
-            //     map.insert(
-            //         key_string.clone(),
-            //         JSJavaProxy::convert(object.get(key_string)?)?,
-            //     );
-            // }
-
-            // return Ok(JSJavaProxy::Object(map));
         }
 
         error!(
@@ -245,88 +221,6 @@ impl JSJavaProxy {
             value
         );
         Err(rquickjs::Error::Unknown)
-    }
-}
-
-pub struct JavaFunction {
-    call: Box<dyn Fn(JSJavaProxy) -> JSJavaProxy>,
-}
-
-impl JavaFunction {
-    pub fn new(context: i32, func: i32) -> Self {
-        debug!("Creating Java function: {} on context {}", func, context);
-        let call = move |arg: JSJavaProxy| {
-            debug!(
-                "Calling Java function: {} on context {} with arg: {:?}",
-                func, context, arg
-            );
-
-            // Serialize args
-            let args = rmp_serde::to_vec(&arg).expect("MsgPack encode failed");
-            let args_len = args.len();
-            let args_ptr = args.as_ptr();
-            std::mem::forget(args); // Prevent drop
-
-            // Call Java function
-            let result = unsafe { call_java_function(context, func, args_ptr, args_len) };
-
-            // Deserialize result, result is a packed pointer and length
-            let result_ptr = result >> 32;
-            let result_len = result as usize;
-            let result_bytes =
-                unsafe { std::slice::from_raw_parts(result_ptr as *const u8, result_len) };
-            let result: JSJavaProxy = match rmp_serde::from_slice(result_bytes) {
-                Ok(result) => result,
-                Err(e) => {
-                    error!(
-                        "MsgPack decode of return value (type JSJavaProxy) from java context failed: {}",
-                        e
-                    );
-                    JSJavaProxy::Undefined
-                }
-            };
-
-            debug!(
-                "Calling Java function: {} on context {} with arg: {:?} -> {:?}",
-                func, context, arg, result
-            );
-
-            result
-        };
-        Self {
-            call: Box::new(call),
-        }
-    }
-}
-
-impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
-    fn param_requirements() -> rquickjs::function::ParamRequirement {
-        // We cannot give any hint on the number of expected parameters
-        ParamRequirement::any()
-    }
-
-    fn call<'a>(
-        &self,
-        params: rquickjs::function::Params<'a, 'js>,
-    ) -> rquickjs::Result<Value<'js>> {
-        let mut args: Vec<JSJavaProxy> = Vec::new();
-        for i in 0..params.len() {
-            let value = params.arg(i);
-            if let Some(v) = value {
-                args.push(JSJavaProxy::convert(v)?);
-            }
-        }
-
-        let arg = JSJavaProxy::Array(args);
-        let result = (self.call)(arg);
-
-        // If the result is an exception, throw it
-        if let JSJavaProxy::Exception(message, _stacktrace) = &result {
-            let exception = rquickjs::Exception::from_message(params.ctx().clone(), &message)?;
-            Err(params.ctx().throw(exception.into_value()))
-        } else {
-            result.into_js(params.ctx())
-        }
     }
 }
 
