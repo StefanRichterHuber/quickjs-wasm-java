@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.stefanrichterhuber</groupId>
@@ -42,9 +44,6 @@
             ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.wasm</wasm.file>
 
         <chicory.interpreterFallback>WARN</chicory.interpreterFallback>
-
-        <!-- Spotbugs fail on error set to false-->
-        <spotbugs.failOnError>false</spotbugs.failOnError>
     </properties>
 
 
@@ -246,7 +245,7 @@
                 <cargo.profile>release</cargo.profile>
                 <cargo.profile.folder>release</cargo.profile.folder>
 
-                <!-- Release build is so small it could be perfectly compiled withoug interpreter
+                <!-- Release build is so small it could be perfectly compiled without interpreter
                 fallback-->
                 <chicory.interpreterFallback>FAIL</chicory.interpreterFallback>
             </properties>
@@ -316,7 +315,8 @@
             </build>
         </profile>
 
-        <!-- Additional optional profile to invoke wasm-opt on the generated wasm file-->
+        <!-- Additional optional profile to invoke wasm-opt on the generated wasm file. Saves around
+        20% of the file size for release builds-->
         <profile>
             <id>wasm-opt</id>
             <build>
