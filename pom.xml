@@ -5,7 +5,7 @@
 
     <groupId>io.github.stefanrichterhuber</groupId>
     <artifactId>quickjs-wasm-java</artifactId>
-    <version>1.2.1</version>
+    <version>1.2.2-SNAPSHOT</version>
 
     <name>quickjs-wasm-java</name>
     <description>Java wrapper for the QuickJS Javascript engine based on Chicorey and rQuickJS compiled to Wasm.</description>
