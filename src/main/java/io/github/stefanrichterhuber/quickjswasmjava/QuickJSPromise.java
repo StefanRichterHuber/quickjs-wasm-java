@@ -64,7 +64,29 @@ class QuickJSPromise extends CompletableFuture<Object> {
     }
 
     /**
-     * Registers callbacks to synchronize the state of this {@link CompletableFuture}
+     * Wraps the given CompletableFuture into a QuickJSPromise so that if the
+     * CompletableFuture completes, the promise completes
+     */
+    static QuickJSPromise wrap(CompletableFuture<?> src, QuickJSContext context) {
+        if (src instanceof QuickJSPromise p) {
+            return p;
+        }
+        final QuickJSPromise p = new QuickJSPromise(context);
+        src.thenAccept(v -> {
+            LOGGER.debug("External CompletableFuture completes this QuickJSPromise with value: {}", v);
+            p.complete(v);
+        });
+        src.exceptionally(e -> {
+            LOGGER.debug("External CompletableFuture rejects this QuickJSPromise with exception: {}", e);
+            p.completeExceptionally(e);
+            return null;
+        });
+        return p;
+    }
+
+    /**
+     * Registers callbacks to synchronize the state of this
+     * {@link CompletableFuture}
      * with the native QuickJS promise.
      */
     private void registerCallbacks() {
@@ -104,7 +126,8 @@ class QuickJSPromise extends CompletableFuture<Object> {
      * Creates a new native promise in the JS runtime.
      * 
      * @param context                QuickJS context.
-     * @param completableFutureIndex Index of the completable future in the context's
+     * @param completableFutureIndex Index of the completable future in the
+     *                               context's
      *                               registry.
      * @return Pointer to the native JS promise.
      */
@@ -157,7 +180,8 @@ class QuickJSPromise extends CompletableFuture<Object> {
     }
 
     /**
-     * Returns the index of this {@link CompletableFuture} in the context's registry.
+     * Returns the index of this {@link CompletableFuture} in the context's
+     * registry.
      * 
      * @return The completable future pointer (index).
      */

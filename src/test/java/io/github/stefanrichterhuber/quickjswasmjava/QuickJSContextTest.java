@@ -12,7 +12,6 @@ import java.util.List;
 import java.util.Map;
 import java.util.Set;
 import java.util.concurrent.CompletableFuture;
-import java.util.concurrent.CompletionException;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
 import java.util.function.BiConsumer;
@@ -520,7 +519,7 @@ public class QuickJSContextTest {
                 context.eval("while(true){}");
                 fail("Script runtime limit should have been reached");
             } catch (Exception e) {
-                System.out.println(e.getMessage());
+                LOGGER.debug(e.getMessage());
             }
         }
     }
@@ -569,7 +568,7 @@ public class QuickJSContextTest {
                 assertEquals("test", quickJSException.getRawMessage());
                 assertEquals("    at <eval> (eval_script:4:11)\n",
                         quickJSException.getStack());
-                System.out.println(e.getMessage());
+                LOGGER.debug(e.getMessage());
             }
         }
     }
@@ -599,7 +598,7 @@ public class QuickJSContextTest {
             assertInstanceOf(QuickJSException.class, e);
             QuickJSException quickJSException = (QuickJSException) e;
             assertEquals("test", quickJSException.getRawMessage());
-            System.out.println(e.getMessage());
+            LOGGER.debug(e.getMessage());
         }
     }
 
@@ -676,6 +675,44 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * High-level async support is provided. Promises from
+     * {@link QuickJSContext#evalAsync(String)} are wrapped by a
+     * CompletableFuture, which will be completed / completed exceptionally as soon
+     * as the underlying promise is completed / rejected
+     * 
+     * @throws Exception
+     */
+    @Test
+    public void promiseSupport() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            CompletableFuture<Object> r1 = context.evalAsync("let trigger;\n" + //
+                    "const manualPromise = new Promise((resolve, reject) => {\n" + //
+                    "  // Assign the internal resolve function to our outside variable\n" + //
+                    "  trigger = resolve; \n" + //
+                    "});\n" + //
+                    "manualPromise\n");
+
+            assertFalse(r1.isDone());
+            CompletableFuture<Object> r2 = context.evalAsync("await trigger(\"Classic resolve\");");
+            // Context.poll is required to trigger further steps in the async runtime
+            while (context.poll()) {
+                Thread.sleep(10);
+            }
+            assertTrue(r1.isDone());
+        }
+    }
+
+    /**
+     * High-level async support is provided. Promises from
+     * {@link QuickJSContext#evalAsync(String)} are wrapped by a
+     * CompletableFuture, which will be completed as soon
+     * as the underlying promise is completed
+     * 
+     * @throws Exception
+     */
     @Test
     public void simplePromiseSupport() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -693,6 +730,14 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * High-level async support is provided. Promises from
+     * {@link QuickJSContext#evalAsync(String)} are wrapped by a
+     * CompletableFuture, which will be completed exceptionally as soon
+     * as the underlying promise is rejected
+     * 
+     * @throws Exception
+     */
     @Test
     public void simplePromiseErrSupport() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -709,54 +754,35 @@ public class QuickJSContextTest {
         }
     }
 
-    @Test
-    public void promiseSupport() throws Exception {
-        try (QuickJSRuntime runtime = new QuickJSRuntime();
-                QuickJSContext context = runtime.createContext()) {
-
-            CompletableFuture<Object> r1 = context.evalAsync("let trigger;\n" + //
-                    "const manualPromise = new Promise((resolve, reject) => {\n" + //
-                    "  // Assign the internal resolve function to our outside variable\n" + //
-                    "  trigger = resolve; \n" + //
-                    "});\n" + //
-                    "manualPromise\n");
-
-            assertFalse(r1.isDone());
-            CompletableFuture<Object> r2 = context.evalAsync("await trigger(\"Classic resolve\");");
-            while (context.poll()) {
-                Thread.sleep(10);
-            }
-            assertTrue(r1.isDone());
-        }
-    }
-
+    /**
+     * Completable futures are internally wrapped with promises and can be treated
+     * like promises
+     */
     @Test
     public void completableFutureSupport() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
                 QuickJSContext context = runtime.createContext()) {
             {
-                QuickJSPromise promise = new QuickJSPromise(context);
+                CompletableFuture<Object> promise = new CompletableFuture<>();
                 context.setGlobal("p0", promise);
 
                 CompletableFuture<Object> r1 = context.evalAsync("await p0");
-                LOGGER.debug("Entering first poll before completing the future");
                 while (context.poll()) {
                     Thread.sleep(10);
                 }
                 promise.complete(53);
-                LOGGER.debug("Entering second poll after completing the future");
                 while (context.poll()) {
                     Thread.sleep(10);
                 }
                 assertEquals(53, promise.join());
+                assertEquals(53, r1.join());
             }
             {
-                QuickJSPromise promise = new QuickJSPromise(context);
+                CompletableFuture<Object> promise = new CompletableFuture<>();
                 //
                 context.setGlobal("p", promise);
                 CompletableFuture result = context.evalAsync("await p.then((v) => { return v * 3; });");
-                assertInstanceOf(CompletableFuture.class, result);
-                System.out.println(result);
+                LOGGER.debug(result);
 
                 while (context.poll()) {
                     Thread.sleep(10);
@@ -770,7 +796,36 @@ public class QuickJSContextTest {
                 assertEquals(162, ((CompletableFuture) result).join());
             }
         }
+    }
 
+    @SuppressWarnings("rawtypes")
+    @Test
+    public void functionsCanReturnCompletableFutures() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            CompletableFuture<Integer> cf = new CompletableFuture<>();
+
+            Supplier<CompletableFuture<Integer>> answer = () -> {
+                return cf;
+            };
+
+            context.setGlobal("answer", answer);
+
+            CompletableFuture<?> result = context.evalAsync("await answer()");
+            assertFalse(((CompletableFuture) result).isDone());
+            while (context.poll()) {
+                Thread.sleep(10);
+            }
+
+            cf.complete(42);
+
+            while (context.poll()) {
+                Thread.sleep(10);
+            }
+            assertTrue(((CompletableFuture) result).isDone());
+            assertEquals(42, ((CompletableFuture) result).join());
+        }
     }
 
 }

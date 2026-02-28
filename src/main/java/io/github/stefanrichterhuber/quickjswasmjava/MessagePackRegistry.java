@@ -223,6 +223,11 @@ class MessagePackRegistry {
 
         register("completableFuture", List.of(CompletableFuture.class), new TypeHandler() {
             public void pack(Object o, MessagePacker p) throws IOException {
+                // Ensure the completablefuture is properly wrapped
+                if (o instanceof CompletableFuture cf) {
+                    o = QuickJSPromise.wrap(cf, MessagePackRegistry.this.ctx);
+                }
+
                 // First check if this is an already registred completable future
                 int index = MessagePackRegistry.this.ctx.completableFutures.indexOf(o);
                 if (index == -1) {

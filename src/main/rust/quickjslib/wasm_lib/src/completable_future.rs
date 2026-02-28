@@ -10,10 +10,9 @@ use wasm_macros::wasm_export;
 
 use crate::{context::ContextPtr, js_to_java_proxy::JSJavaProxy};
 
-/**
- * In this private field in any promise, we store a reference to the corresponding java completable future
- */
+/// In this private field in any promise, we store a reference to the corresponding java completable future
 pub static JAVA_COMPLETABLE_FUTURE_PTR_FIELD: &str = "__completable_future_ptr";
+/// In this private field in any promise, we store a the global pointer of this promise
 pub static JS_PROMISE_CONTAINER_PTR_FIELD: &str = "___js_promise_container_ptr";
 
 #[link(wasm_import_module = "env")]
@@ -32,6 +31,7 @@ extern "C" {
     ) -> i64;
 }
 
+/// Stores a Promise and, optionally, its resolve and reject functions
 pub struct PromiseContainer {
     pub promise: Persistent<Promise<'static>>,
     pub resolve: Option<Persistent<Function<'static>>>,
@@ -39,6 +39,7 @@ pub struct PromiseContainer {
 }
 
 impl PromiseContainer {
+    /// Creates a new promise container
     pub(crate) fn new<'js>(
         ctx: &Ctx<'js>,
         promise: Promise<'js>,
@@ -56,6 +57,7 @@ impl PromiseContainer {
         }
     }
 
+    /// Executes the resolve function for the stored promise
     pub(crate) fn resolve<'js>(&self, ctx: &Ctx<'js>, value: JSJavaProxy) -> rquickjs::Result<()> {
         let promise = Persistent::restore(self.promise.clone(), ctx)?;
         let resolve = Persistent::restore(self.resolve.clone().unwrap(), ctx)?;
@@ -66,6 +68,7 @@ impl PromiseContainer {
         Ok(())
     }
 
+    /// Executes the reject function for the stored promise
     pub(crate) fn reject<'js>(&self, ctx: &Ctx<'js>, value: JSJavaProxy) -> rquickjs::Result<()> {
         let promise = Persistent::restore(self.promise.clone(), ctx)?;
         let reject = Persistent::restore(self.reject.clone().unwrap(), ctx)?;
@@ -98,23 +101,22 @@ pub fn promise_reject(
 }
 
 #[wasm_export]
-pub fn promise_create(context: &Context, cf_ptr: i32) -> Box<PromiseContainer> {
-    let result = context.with(|ctx| {
-        let (promise, resolve, reject) = ctx.promise().unwrap();
+pub fn promise_create(
+    ctx: &Ctx<'_>,
+    cf_ptr: i32,
+) -> rquickjs::Result<Option<Box<PromiseContainer>>> {
+    debug!("Creating promise for completable future {}", cf_ptr);
+    let (promise, resolve, reject) = ctx.promise()?;
 
-        promise
-            .set(JAVA_COMPLETABLE_FUTURE_PTR_FIELD, cf_ptr)
-            .unwrap();
-        let cf = Box::new(PromiseContainer::new(
-            &ctx,
-            promise,
-            Some(resolve),
-            Some(reject),
-        ));
-        cf
-    });
-
-    result
+    promise.set(JAVA_COMPLETABLE_FUTURE_PTR_FIELD, cf_ptr)?;
+    let cf = Box::new(PromiseContainer::new(
+        &ctx,
+        promise,
+        Some(resolve),
+        Some(reject),
+    ));
+    debug!("Created promise for completable future {}", cf_ptr);
+    Ok(Some(cf))
 }
 
 pub struct JavaPromise {
@@ -183,8 +185,8 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaPromise {
             }
         } else {
             debug!(
-                "Calling JavaPromise.call() on value with reject {} -> Promise resolved",
-                self.reject
+                "Calling JavaPromise.call() on value with reject {} -> Promise resolved to {:?}",
+                self.reject, arg
             );
             Self::convert_value(arg)?
         };
