@@ -758,6 +758,7 @@ public class QuickJSContextTest {
      * Completable futures are internally wrapped with promises and can be treated
      * like promises
      */
+    @SuppressWarnings("rawtypes")
     @Test
     public void completableFutureSupport() throws Exception {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
@@ -798,6 +799,10 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * On can return completable futures from java functions and these are treated
+     * like promises on the js side
+     */
     @SuppressWarnings("rawtypes")
     @Test
     public void functionsCanReturnCompletableFutures() throws Exception {
@@ -813,13 +818,19 @@ public class QuickJSContextTest {
             context.setGlobal("answer", answer);
 
             CompletableFuture<?> result = context.evalAsync("await answer()");
+
+            // Result is not completed here
             assertFalse(((CompletableFuture) result).isDone());
             while (context.poll()) {
                 Thread.sleep(10);
             }
+            // Even after emptying the event pipeline it is still not completed
+            assertFalse(((CompletableFuture) result).isDone());
 
+            // Now finally complete it
             cf.complete(42);
 
+            // Empty the event pipeline -> the CompletableFuture will be completed here
             while (context.poll()) {
                 Thread.sleep(10);
             }

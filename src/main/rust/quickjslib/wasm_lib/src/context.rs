@@ -100,7 +100,9 @@ thread_local! {
 /// Why is this necessary: calling eval() creates a Ctx object,
 /// when script calls a java function and the java function calls some
 /// native function ( to create an Object, Array or Promise, for example)
-///  another Ctx object is created -> error. Therefore we wrap any context.with with with_context
+/// another Ctx object is created -> error. Therefore we wrap any context.with
+/// with with_context and check if there is some Ctx already open
+/// Usually no need to invoke manually, since the wasm_export macro does all the magic around it
 pub(crate) fn with_context<F, R>(context: &Context, f: F) -> R
 where
     F: FnOnce(Ctx) -> R,

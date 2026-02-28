@@ -102,6 +102,9 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
     private static long createNativeObject(QuickJSContext ctx) {
         final ExportFunction create = ctx.getRuntime().getInstance().export("object_create_wasm");
         final long[] result = create.apply(ctx.getContextPointer());
+        if (result[0] == 0l) {
+            throw new IllegalStateException("Failed to create native object");
+        }
         return result[0];
     }
 

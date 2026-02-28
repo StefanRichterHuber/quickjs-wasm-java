@@ -5,16 +5,11 @@ use wasm_macros::wasm_export;
 use crate::js_to_java_proxy::JSJavaProxy;
 
 #[wasm_export]
-pub fn object_create(context: &Context) -> Box<Persistent<Object<'static>>> {
-    let result = context.with(|ctx| {
-        let js_object = rquickjs::Object::new(ctx.clone()).unwrap();
-        let persistent = Persistent::save(&ctx, js_object);
-        persistent
-    });
-
-    let result = Box::new(result);
-
-    result
+pub fn object_create(ctx: &Ctx<'_>) -> rquickjs::Result<Option<Box<Persistent<Object<'static>>>>> {
+    let js_object = rquickjs::Object::new(ctx.clone())?;
+    let persistent = Persistent::save(&ctx, js_object);
+    let result = Box::new(persistent);
+    Ok(Some(result))
 }
 
 #[wasm_export]

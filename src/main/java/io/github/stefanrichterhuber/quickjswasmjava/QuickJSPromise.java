@@ -99,6 +99,8 @@ class QuickJSPromise extends CompletableFuture<Object> {
                     long[] r = this.resolve.apply(this.getContextPointer(), this.getPromisePointer(),
                             valueLocation.pointer(),
                             valueLocation.length());
+                    LOGGER.debug("Result of resolving promise on js: {}", r[0]);
+
                 }
             } else {
                 LOGGER.debug("JS promise already completed");
@@ -114,6 +116,7 @@ class QuickJSPromise extends CompletableFuture<Object> {
                     long[] r = this.reject.apply(this.getContextPointer(), this.getPromisePointer(),
                             valueLocation.pointer(),
                             valueLocation.length());
+                    LOGGER.debug("Result of rejecting promise on js: {}", r[0]);
                 }
             } else {
                 LOGGER.debug("JS promise already rejected");
@@ -135,6 +138,9 @@ class QuickJSPromise extends CompletableFuture<Object> {
         final ExportFunction create = context.getRuntime().getInstance().export("promise_create_wasm");
         final long[] result = create.apply(context.getContextPointer(), completableFutureIndex);
         final long promisePtr = result[0];
+        if (promisePtr == 0l) {
+            throw new IllegalStateException("Failed to create native promise");
+        }
         LOGGER.debug("Created JS promise with pointer: {} and a completable future pointer: {}", promisePtr,
                 completableFutureIndex);
         return promisePtr;
