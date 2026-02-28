@@ -9,6 +9,7 @@ import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -221,28 +222,28 @@ class MessagePackRegistry {
             }
         });
 
-        register("completableFuture", List.of(CompletableFuture.class), new TypeHandler() {
+        register("completableFuture", List.of(CompletionStage.class), new TypeHandler() {
             public void pack(Object o, MessagePacker p) throws IOException {
-                // Ensure the completablefuture is properly wrapped
-                if (o instanceof CompletableFuture cf) {
-                    o = QuickJSPromise.wrap(cf, MessagePackRegistry.this.ctx);
-                }
+                if (o instanceof CompletionStage cf) {
+                    // Ensure the completablefuture is properly wrapped
+                    final QuickJSPromise promise = QuickJSPromise.wrap(cf, MessagePackRegistry.this.ctx);
 
-                // First check if this is an already registred completable future
-                int index = MessagePackRegistry.this.ctx.completableFutures.indexOf(o);
-                if (index == -1) {
-                    MessagePackRegistry.this.ctx.completableFutures.add((CompletableFuture<Object>) o);
-                    index = MessagePackRegistry.this.ctx.completableFutures.size() - 1;
-                }
+                    // First check if this is an already registred completable future
+                    int index = MessagePackRegistry.this.ctx.completableFutures.indexOf(promise);
+                    if (index == -1) {
+                        MessagePackRegistry.this.ctx.completableFutures.add(promise);
+                        index = MessagePackRegistry.this.ctx.completableFutures.size() - 1;
+                    }
 
-                // Then check for a promise pointer -> available if it is a QuickJSPromise
-                long promisePtr = 0l;
-                if (o instanceof QuickJSPromise) {
-                    promisePtr = ((QuickJSPromise) o).getPromisePointer();
+                    // Then check for a promise pointer -> available if it is a QuickJSPromise
+                    final long promisePtr = promise.getPromisePointer();
+                    p.packArrayHeader(2);
+                    p.packInt(index);
+                    p.packLong(promisePtr);
+                } else {
+                    throw new IllegalStateException(
+                            "Calling pack for CompletionStage on an object which is not a CompletionStage: " + o);
                 }
-                p.packArrayHeader(2);
-                p.packInt(index);
-                p.packLong(promisePtr);
             }
 
             public Object unpack(MessageUnpacker u) throws IOException {

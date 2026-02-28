@@ -1,6 +1,7 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.concurrent.atomic.AtomicBoolean;
 
 import org.apache.logging.log4j.LogManager;
@@ -64,10 +65,10 @@ class QuickJSPromise extends CompletableFuture<Object> {
     }
 
     /**
-     * Wraps the given CompletableFuture into a QuickJSPromise so that if the
+     * Wraps the given CompletionStage into a QuickJSPromise so that if the
      * CompletableFuture completes, the promise completes
      */
-    static QuickJSPromise wrap(CompletableFuture<?> src, QuickJSContext context) {
+    static QuickJSPromise wrap(CompletionStage<?> src, QuickJSContext context) {
         if (src instanceof QuickJSPromise p) {
             return p;
         }
