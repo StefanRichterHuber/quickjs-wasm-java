@@ -3,6 +3,9 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 import java.util.List;
 import java.util.function.Function;
 
+import org.apache.logging.log4j.LogManager;
+import org.apache.logging.log4j.Logger;
+
 import com.dylibso.chicory.runtime.ExportFunction;
 
 import io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime.ScriptDurationGuard;
@@ -11,6 +14,8 @@ import io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime.ScriptDuratio
  * Represents a quickjs native function
  */
 public final class QuickJSFunction implements Function<List<Object>, Object> {
+    private static final Logger LOGGER = LogManager.getLogger();
+
     /**
      * The context this function belongs to.
      */
@@ -43,7 +48,7 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
         this.functionPtr = functionPtr;
         this.call = context.getRuntime().getInstance().export("call_function_wasm");
         this.close = context.getRuntime().getInstance().export("close_function_wasm");
-        context.addDependendResource(this::close);
+        context.addDependentResource(this::close);
     }
 
     /**
@@ -74,9 +79,13 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
      * @throws Exception
      */
     private void close() throws Exception {
+        LOGGER.debug("Closing QuickJSFunction with pointer {}", functionPtr);
+
         if (this.functionPtr != 0) {
             this.close.apply(getContextPointer(), functionPtr);
             this.functionPtr = 0;
+        } else {
+            LOGGER.debug("QuickJSFunction already closed!");
         }
     }
 

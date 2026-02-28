@@ -83,7 +83,7 @@ public final class QuickJSArray<T> extends AbstractList<T> {
         this.arrayPtr = arrayPtr;
         this.context = context;
 
-        this.context.addDependendResource(this::close);
+        this.context.addDependentResource(this::close);
     }
 
     /**
@@ -125,7 +125,10 @@ public final class QuickJSArray<T> extends AbstractList<T> {
      * @throws Exception
      */
     private void close() throws Exception {
+        LOGGER.debug("Closing QuickJSArray with pointer {}", arrayPtr);
+
         if (arrayPtr == 0) {
+            LOGGER.debug("QuickJSArray already closed!");
             return;
         }
         try {

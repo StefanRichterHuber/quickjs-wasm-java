@@ -51,7 +51,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
     QuickJSObject(QuickJSContext ctx, long objectPointer) {
         this.ctx = ctx;
         this.objectPointer = objectPointer;
-        this.ctx.addDependendResource(this::close);
+        this.ctx.addDependentResource(this::close);
         this.containsKey = ctx.getRuntime().getInstance().export("object_contains_key_wasm");
         this.getValue = ctx.getRuntime().getInstance().export("object_get_value_wasm");
         this.setValue = ctx.getRuntime().getInstance().export("object_set_value_wasm");
@@ -112,7 +112,9 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
      * @throws Exception
      */
     private void close() throws Exception {
+        LOGGER.debug("Closing QuickJSObject with pointer {}", objectPointer);
         if (objectPointer == 0) {
+            LOGGER.debug("QuickJSObject already closed!");
             return;
         }
         try {

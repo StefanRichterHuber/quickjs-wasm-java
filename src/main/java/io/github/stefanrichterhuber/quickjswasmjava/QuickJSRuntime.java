@@ -1,6 +1,5 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
-import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -410,16 +409,6 @@ public final class QuickJSRuntime implements AutoCloseable {
         long ptr = alloc(data.length);
         getInstance().memory().write((int) ptr, data);
         return new MemoryLocation(ptr, data.length, this);
-    }
-
-    /**
-     * Writes the given string to memory and returns the memory location of the data
-     * 
-     * @param data the string to write
-     * @return the memory location of the data
-     */
-    MemoryLocation writeToMemory(String data) {
-        return writeToMemory(data.getBytes(StandardCharsets.UTF_8));
     }
 
     /**
