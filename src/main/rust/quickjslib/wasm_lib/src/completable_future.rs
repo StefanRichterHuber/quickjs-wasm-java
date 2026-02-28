@@ -91,6 +91,12 @@ pub fn promise_resolve(
 }
 
 #[wasm_export]
+pub fn promise_close(_context: &Context, object: Box<PromiseContainer>) -> bool {
+    drop(object);
+    true
+}
+
+#[wasm_export]
 pub fn promise_reject(
     ctx: &Ctx<'_>,
     cf: &PromiseContainer,

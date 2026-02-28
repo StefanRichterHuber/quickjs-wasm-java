@@ -17,11 +17,12 @@ import com.dylibso.chicory.runtime.ExportFunction;
 class QuickJSPromise extends CompletableFuture<Object> {
     private static final Logger LOGGER = LogManager.getLogger();
 
-    private final long promisePtr;
+    private long promisePtr;
     private final int completableFuturePtr;
     private final QuickJSContext context;
     private final ExportFunction resolve;
     private final ExportFunction reject;
+    private final ExportFunction close;
 
     private final AtomicBoolean completedByJS = new AtomicBoolean(false);
 
@@ -35,6 +36,7 @@ class QuickJSPromise extends CompletableFuture<Object> {
         this.context = context;
         this.resolve = context.getRuntime().getInstance().export("promise_resolve_wasm");
         this.reject = context.getRuntime().getInstance().export("promise_reject_wasm");
+        this.close = context.getRuntime().getInstance().export("promise_close_wasm");
         this.context.completableFutures.add(this);
         this.completableFuturePtr = this.context.completableFutures.size() - 1;
         this.promisePtr = promisePtr;
@@ -43,6 +45,7 @@ class QuickJSPromise extends CompletableFuture<Object> {
                 completableFuturePtr);
 
         registerCallbacks();
+        this.context.addDependentResource(this::close);
     }
 
     /**
@@ -54,6 +57,7 @@ class QuickJSPromise extends CompletableFuture<Object> {
         this.context = context;
         this.resolve = context.getRuntime().getInstance().export("promise_resolve_wasm");
         this.reject = context.getRuntime().getInstance().export("promise_reject_wasm");
+        this.close = context.getRuntime().getInstance().export("promise_close_wasm");
         this.context.completableFutures.add(this);
         this.completableFuturePtr = this.context.completableFutures.size() - 1;
         this.promisePtr = createNativePromise(context, completableFuturePtr);
@@ -61,7 +65,25 @@ class QuickJSPromise extends CompletableFuture<Object> {
                 this.promisePtr,
                 completableFuturePtr);
         registerCallbacks();
+        this.context.addDependentResource(this::close);
+    }
 
+    private void close() throws Exception {
+        LOGGER.debug("Closing QuickJSPromise with native pointer {} and corresponding CompletableFuture {}",
+                this.promisePtr, this.completableFuturePtr);
+
+        if (promisePtr == 0) {
+            LOGGER.debug("QuickJSPromise already closed!");
+            return;
+        }
+
+        try {
+            this.close.apply(this.getContextPointer(), this.getPromisePointer());
+        } catch (Exception e) {
+            // May fail
+            LOGGER.debug("Failed to close native promise", e);
+        }
+        promisePtr = 0;
     }
 
     /**
