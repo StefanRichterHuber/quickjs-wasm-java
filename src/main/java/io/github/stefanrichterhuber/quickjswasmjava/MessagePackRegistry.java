@@ -229,11 +229,7 @@ class MessagePackRegistry {
                     final QuickJSPromise promise = QuickJSPromise.wrap(cf, MessagePackRegistry.this.ctx);
 
                     // First check if this is an already registred completable future
-                    int index = MessagePackRegistry.this.ctx.completableFutures.indexOf(promise);
-                    if (index == -1) {
-                        MessagePackRegistry.this.ctx.completableFutures.add(promise);
-                        index = MessagePackRegistry.this.ctx.completableFutures.size() - 1;
-                    }
+                    final int index = promise.getCompletableFuturePointer();
 
                     // Then check for a promise pointer -> available if it is a QuickJSPromise
                     final long promisePtr = promise.getPromisePointer();
