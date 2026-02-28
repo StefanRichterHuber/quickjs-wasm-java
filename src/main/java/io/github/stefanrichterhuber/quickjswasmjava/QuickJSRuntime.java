@@ -192,7 +192,24 @@ public final class QuickJSRuntime implements AutoCloseable {
                         List.of(ValType.I32)),
                 this::interruptHandlerHostFunction);
 
-        return new HostFunction[] { hostFunction, logHostFunction, interruptHandlerHostFunction };
+        HostFunction createCompletableFutureHostFunction = new HostFunction(
+                "env",
+                "create_completable_future",
+                FunctionType.of(
+                        List.of(ValType.I64, ValType.I64),
+                        List.of(ValType.I64)),
+                this::createCompletableFutureHostFunction);
+
+        HostFunction completeCompletableFuture = new HostFunction(
+                "env",
+                "complete_completable_future",
+                FunctionType.of(
+                        List.of(ValType.I64, ValType.I32, ValType.I32, ValType.I32, ValType.I32),
+                        List.of(ValType.I64)),
+                this::completeCompletableFutureHostFunction);
+
+        return new HostFunction[] { hostFunction, logHostFunction, interruptHandlerHostFunction,
+                createCompletableFutureHostFunction, completeCompletableFuture };
     }
 
     /**
@@ -213,6 +230,30 @@ public final class QuickJSRuntime implements AutoCloseable {
             return result ? new long[] { 1 } : new long[] { 0 };
         }
         return new long[] { 0 };
+    }
+
+    /**
+     * Creates a new completable future and returns its index. Used to wrap native
+     * promises.
+     */
+    private long[] createCompletableFutureHostFunction(Instance instance, long... args) {
+        long contextPtr = args[0];
+        long promisePtr = args[1];
+        final QuickJSContext context = contexts.get(contextPtr);
+        if (context == null) {
+            throw new RuntimeException("Context not found: " + contextPtr);
+        }
+        return context.createCompletableFutureHostFunction(instance, promisePtr);
+    }
+
+    private long[] completeCompletableFutureHostFunction(Instance instance, long... args) {
+        long contextPtr = (long) args[0];
+        final QuickJSContext context = contexts.get(contextPtr);
+        if (context == null) {
+            throw new RuntimeException("Context not found: " + contextPtr);
+        }
+        return context.completeCompletableFutureHostFunction(instance, (int) args[1], (int) args[2], args[3],
+                (int) args[4]);
     }
 
     /**

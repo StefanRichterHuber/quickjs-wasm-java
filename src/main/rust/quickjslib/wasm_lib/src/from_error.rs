@@ -29,6 +29,29 @@ impl<'js> FromError<'js> for JSJavaProxy {
     }
 }
 
+impl<'js, T> FromError<'js> for Option<Box<T>> {
+    fn from_err(ctx: &Ctx<'js>, err: rquickjs::Error) -> Self {
+        match err {
+            rquickjs::Error::Exception => {
+                let catch = ctx.catch();
+                if let Some(exception) = catch.as_exception() {
+                    let message = exception.message().unwrap();
+                    let stacktrace = exception.stack().unwrap();
+                    error!("Failed to call js {}: {}", message, stacktrace);
+                    None
+                } else {
+                    error!("Failed to call js {}", err.to_string());
+                    None
+                }
+            }
+            _ => {
+                error!("Failed to call js {}", err.to_string());
+                None
+            }
+        }
+    }
+}
+
 /// Converts a rquickjs::Error into a bool that can be returned to Java
 ///
 impl<'js> FromError<'js> for bool {

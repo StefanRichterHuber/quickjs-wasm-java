@@ -16,6 +16,9 @@ use serde::Deserialize;
 use serde::Serialize;
 use std::collections::HashMap;
 
+use crate::completable_future;
+use crate::completable_future::convert_promise;
+use crate::completable_future::PromiseContainer;
 use crate::quickjs_function::JavaFunction;
 
 /// This the central conversion point between JS types and java types. It implements FromJs, IntoJs, FromAtom and IntoAtom as well as IntoArgs.
@@ -42,6 +45,8 @@ pub enum JSJavaProxy {
     JavaFunction(i32, i32),
     /// Fields: Message, Stacktrace
     Exception(String, String),
+    /// Fields: Pointer to java completable future, Pointer to native promise
+    CompletableFuture(i32, u64),
 }
 
 impl<'js> FromJs<'js> for JSJavaProxy {
@@ -125,6 +130,19 @@ impl<'js> IntoJs<'js> for JSJavaProxy {
                 let object = persistent_object.clone().restore(ctx)?;
                 Ok(object.into_value())
             }
+            JSJavaProxy::CompletableFuture(future_ptr, promise_ptr) => {
+                let container = unsafe { &*(promise_ptr as *mut PromiseContainer) };
+                let restored_promise = container.promise.clone().restore(ctx)?;
+                restored_promise.set(
+                    completable_future::JAVA_COMPLETABLE_FUTURE_PTR_FIELD,
+                    future_ptr,
+                )?;
+                restored_promise.set(
+                    completable_future::JS_PROMISE_CONTAINER_PTR_FIELD,
+                    promise_ptr,
+                )?;
+                Ok(restored_promise.into_value())
+            }
         };
         result
     }
@@ -162,6 +180,9 @@ impl JSJavaProxy {
             return Ok(JSJavaProxy::Null);
         } else if value.is_undefined() {
             return Ok(JSJavaProxy::Undefined);
+        } else if value.is_promise() {
+            let promise = value.into_promise().unwrap();
+            return convert_promise(promise);
         } else if value.is_function() {
             let function = value.into_function().unwrap();
             let ctx = function.ctx().clone();
@@ -174,7 +195,7 @@ impl JSJavaProxy {
             debug!("Exported function: {} -> {}", name, persistent_function_ptr);
             return Ok(JSJavaProxy::Function(name, persistent_function_ptr));
         } else if value.is_string() {
-            let string = value.into_string().unwrap();
+            let string = value.into_string().clone().unwrap();
             return Ok(JSJavaProxy::String(string.to_string()?));
         } else if value.is_int() {
             let number = value.as_int().unwrap();

@@ -64,6 +64,8 @@ The project uses Maven and is pre-configured to build the WebAssembly library us
 
 ### Usage
 
+#### Basic usage
+
 To use the library, add the following Maven dependency to your `pom.xml`. Replace `[current version]` with the appropriate version number.
 
 ```xml
@@ -115,7 +117,10 @@ public class QuickJSExample {
 }
 ```
 
- The context object `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` is the main entry point to interact with the JavaScript runtime. It provides a set of methods to interact with the JavaScript runtime, set global variables, evaluate scripts, and more. It also implements `javax.script.Invocable`, allowing to invoke JavaScript functions from Java or map them to Java interfaces.
+ The context object `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext` is the main entry point to interact with the JavaScript runtime. It provides a set of methods to interact with the JavaScript runtime, set global variables, evaluate scripts, and more. 
+ 
+ #### JSR223 compatiblity
+ It also implements `javax.script.Invocable`, allowing to invoke JavaScript functions from Java or map them to Java interfaces.
 
 ```java
     public interface TestInterface {
@@ -134,6 +139,51 @@ public class QuickJSExample {
         }
 ```
 
+Moreover the [JSR-223](https://jcp.org/en/jsr/detail?id=223) specification is implemented on a best effort basis, allowing it to be used as a script engine in Java applications.
+
+```java
+    ScriptEngineManager manager = new ScriptEngineManager();
+    ScriptEngine engine = manager.getEngineByName("QuickJS");
+    Bindings bindings = engine.createBindings();
+    bindings.put("a", 10);
+    bindings.put("b", 20);
+    Object result = engine.eval("a + b", bindings);
+    assertEquals(30, result);
+```
+
+
+#### Async / Await support
+
+There is some preliminary high-level async / await support.  The special `io.github.stefanrichterhuber.quickjswasmjava.QuickJSContext#evalAsync` returns wraps any promise into a `java.util.concurrent.CompletableFuture` and any `java.util.concurrent.CompletableFuture` is wrapped as a promise. As of now, however, the runtime is not thread-safe, so ensure (by using suitable Executors, for example) to have all interactions with the JS runtime in one thread.
+
+```java
+  try (QuickJSRuntime runtime = new QuickJSRuntime(); QuickJSContext context = runtime.createContext()) {
+
+        CompletableFuture<Integer> cf = new CompletableFuture<>();
+
+        Supplier<CompletableFuture<Integer>> answer = () -> {
+            return cf;
+        };
+
+        context.setGlobal("answer", answer);
+
+        CompletableFuture<?> result = context.evalAsync("await answer()");
+        assertFalse(((CompletableFuture) result).isDone());
+        while (context.poll()) {
+            Thread.sleep(10);
+        }
+
+        cf.complete(42);
+
+        while (context.poll()) {
+            Thread.sleep(10);
+        }
+        assertTrue(((CompletableFuture) result).isDone());
+        assertEquals(42, ((CompletableFuture) result).join());
+    }
+```
+
+
 For more comprehensive examples and detailed usage patterns, refer to the unit tests: [`io.github.stefanrichterhuber.quickjswasmjava.QuickJSContextTest`](src/test/java/io/github/stefanrichterhuber/quickjswasmjava/QuickJSContextTest.java).
 
 ## Type Mapping
@@ -147,6 +197,7 @@ The library handles seamless translation between supported Java and JavaScript t
 | `java.lang.Double` / `java.lang.Float` | `number` | Internally handles boxing/unboxing for floating-point numbers. |
 | `java.lang.Integer` | `number` | Internally handles boxing/unboxing for integer numbers. |
 | `java.lang.String` | `string` | |
+| `java.util.concurrent.CompletableFuture` |  `promise` | Bidirectional wrapping of CompletableFuture to promises.  |
 | `io.github.stefanrichterhuber.quickjswasmjava.QuickJSException` | `Error` (exception) | JavaScript exceptions are translated to `QuickJSException` objects in Java. Each exception includes a message and a stack trace (with exact line and column numbers). Java exceptions thrown within callbacks are transformed into JavaScript exceptions and then returned to Java as `QuickJSException`. Note that the original Java stack trace is lost in this process. |
 | `io.github.stefanrichterhuber.quickjswasmjava.QuickJSArray<Object>` | `array` | Wraps native JavaScript arrays. Values can be any supported type, including mixed types and nested lists/maps. Changes are reflected bi-directionally. |
 | `io.github.stefanrichterhuber.quickjswasmjava.QuickJSObject<String, Object>` | `object` | Wraps native JavaScript objects. Keys can be strings, numbers, or booleans. Values can be any supported type, including mixed types and nested lists/maps. Changes are reflected bi-directionally. |
@@ -159,19 +210,6 @@ The library handles seamless translation between supported Java and JavaScript t
 | `java.util.function.BiConsumer<P, Q>` | `function` | Java `BiConsumer` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `BiConsumer<P, Q>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (returning `null`). |
 | `java.util.function.Supplier<R>` | `function` | Java `Supplier` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `Supplier<R>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (with an empty argument `List`). |
 
-## JSR-223
-
-The library implements the [JSR-223](https://jcp.org/en/jsr/detail?id=223) interface, allowing it to be used as a script engine in Java applications.
-
-```java
-    ScriptEngineManager manager = new ScriptEngineManager();
-    ScriptEngine engine = manager.getEngineByName("QuickJS");
-    Bindings bindings = engine.createBindings();
-    bindings.put("a", 10);
-    bindings.put("b", 20);
-    Object result = engine.eval("a + b", bindings);
-    assertEquals(30, result);
-```
 
 ## Technical Details
 

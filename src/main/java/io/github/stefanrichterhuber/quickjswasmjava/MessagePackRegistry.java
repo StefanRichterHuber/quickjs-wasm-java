@@ -8,6 +8,8 @@ import java.util.HashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.CompletionStage;
 import java.util.function.Function;
 import java.util.stream.Collectors;
 
@@ -217,6 +219,48 @@ class MessagePackRegistry {
                 String message = u.unpackString();
                 String stack = u.unpackString();
                 return new QuickJSException(message, stack);
+            }
+        });
+
+        register("completableFuture", List.of(CompletionStage.class), new TypeHandler() {
+            public void pack(Object o, MessagePacker p) throws IOException {
+                if (o instanceof CompletionStage cf) {
+                    // Ensure the completablefuture is properly wrapped
+                    final QuickJSPromise promise = QuickJSPromise.wrap(cf, MessagePackRegistry.this.ctx);
+
+                    // First check if this is an already registred completable future
+                    int index = MessagePackRegistry.this.ctx.completableFutures.indexOf(promise);
+                    if (index == -1) {
+                        MessagePackRegistry.this.ctx.completableFutures.add(promise);
+                        index = MessagePackRegistry.this.ctx.completableFutures.size() - 1;
+                    }
+
+                    // Then check for a promise pointer -> available if it is a QuickJSPromise
+                    final long promisePtr = promise.getPromisePointer();
+                    p.packArrayHeader(2);
+                    p.packInt(index);
+                    p.packLong(promisePtr);
+                } else {
+                    throw new IllegalStateException(
+                            "Calling pack for CompletionStage on an object which is not a CompletionStage: " + o);
+                }
+            }
+
+            public Object unpack(MessageUnpacker u) throws IOException {
+                final int arraySize = u.unpackArrayHeader();
+                if (arraySize != 2) {
+                    throw new RuntimeException(
+                            "Expected completableFuture with 2 element (completable futre pointer, promise pointer)");
+                }
+                final int futurePtr = u.unpackInt();
+                final long promisePtr = u.unpackLong();
+
+                // TODO wrap into a completablefuture with promise ptr
+                final CompletableFuture<Object> f = MessagePackRegistry.this.ctx.completableFutures.get(futurePtr);
+                if (f == null) {
+                    throw new IllegalStateException("No future for future ptr " + futurePtr + " found");
+                }
+                return f;
             }
         });
 
