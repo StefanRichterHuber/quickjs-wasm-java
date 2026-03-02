@@ -7,7 +7,7 @@ import java.lang.reflect.Method;
  * Invocation handler for a QuickJS context. This allows to create a dynamic
  * proxy for the QuickJS context / a QuickJS object.
  */
-class ScriptInvocationHandler<K, V> implements InvocationHandler {
+final class ScriptInvocationHandler<K, V> implements InvocationHandler {
 
     /**
      * The QuickJS context to use.

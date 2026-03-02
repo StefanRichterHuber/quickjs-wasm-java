@@ -14,7 +14,7 @@ import com.dylibso.chicory.runtime.ExportFunction;
  * CompletableFuture to provide a Java
  * interface to the promise.
  */
-class QuickJSPromise extends CompletableFuture<Object> {
+final class QuickJSPromise extends CompletableFuture<Object> {
     private static final Logger LOGGER = LogManager.getLogger();
 
     private long promisePtr;
