@@ -256,6 +256,12 @@ class MessagePackRegistry {
                 if (f == null) {
                     throw new IllegalStateException("No future for future ptr " + futurePtr + " found");
                 }
+                if (f instanceof QuickJSPromise p) {
+                    if (p.getPromisePointer() != promisePtr) {
+                        throw new IllegalStateException(
+                                "Promise pointer does not match for completable future " + futurePtr);
+                    }
+                }
                 return f;
             }
         });

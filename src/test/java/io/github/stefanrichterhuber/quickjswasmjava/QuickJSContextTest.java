@@ -702,6 +702,7 @@ public class QuickJSContextTest {
                 Thread.sleep(10);
             }
             assertTrue(r1.isDone());
+            assertTrue(r2.isDone());
         }
     }
 

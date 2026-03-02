@@ -68,6 +68,11 @@ class QuickJSPromise extends CompletableFuture<Object> {
         this.context.addDependentResource(this::close);
     }
 
+    /**
+     * Closes the native promise and removes this wrapper from the context.
+     * 
+     * @throws Exception
+     */
     private void close() throws Exception {
         LOGGER.debug("Closing QuickJSPromise with native pointer {} and corresponding CompletableFuture {}",
                 this.promisePtr, this.completableFuturePtr);
