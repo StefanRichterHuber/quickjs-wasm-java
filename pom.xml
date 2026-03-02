@@ -1,6 +1,8 @@
 <?xml version="1.0" encoding="UTF-8"?>
 
-<project xmlns="http://maven.apache.org/POM/4.0.0" xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 http://maven.apache.org/xsd/maven-4.0.0.xsd">
     <modelVersion>4.0.0</modelVersion>
 
     <groupId>io.github.stefanrichterhuber</groupId>
@@ -39,8 +41,8 @@
         <cargo.profile.folder>debug</cargo.profile.folder>
         <cargo.target>wasm32-wasip1</cargo.target>
         <!-- Contains the wasm file after building before optimization -->
-        <wasm.file>
-            ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.wasm</wasm.file>
+        <wasm.folder>${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}</wasm.folder>
+        <wasm.file>${wasm.folder}/wasm_lib.wasm</wasm.file>
         <!-- Contains the wasm file after optimization (same as wasm.file for dev profile) -->
         <wasm.optimized.file>${wasm.file}</wasm.optimized.file>
         <!-- Chicory interpreter fallback level. Necessary for dev profile -->
@@ -321,8 +323,7 @@
         <profile>
             <id>wasm-opt</id>
             <properties>
-                <wasm.optimized.file>
-                    ${project.build.directory}/rust/${cargo.target}/${cargo.profile.folder}/wasm_lib.opt.wasm</wasm.optimized.file>
+                <wasm.optimized.file>${wasm.folder}//wasm_lib.opt.wasm</wasm.optimized.file>
             </properties>
             <build>
                 <plugins>
