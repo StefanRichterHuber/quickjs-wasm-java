@@ -116,7 +116,7 @@ pub fn promise_create(
 
     promise.set(JAVA_COMPLETABLE_FUTURE_PTR_FIELD, cf_ptr)?;
     let cf = Box::new(PromiseContainer::new(
-        &ctx,
+        ctx,
         promise,
         Some(resolve),
         Some(reject),
@@ -275,12 +275,12 @@ pub(crate) fn convert_promise<'js>(promise: Promise<'js>) -> rquickjs::Result<JS
 
     let completable_future_complete = JavaPromise::new(
         ctx_pointer.ptr,
-        completable_future_ptr.try_into().unwrap(),
+        completable_future_ptr,
         false,
     );
     let completable_future_reject = JavaPromise::new(
         ctx_pointer.ptr,
-        completable_future_ptr.try_into().unwrap(),
+        completable_future_ptr,
         true,
     );
 
@@ -307,8 +307,8 @@ pub(crate) fn convert_promise<'js>(promise: Promise<'js>) -> rquickjs::Result<JS
     ))?;
     debug!("Called .then() and .catch() on the promise");
 
-    return Ok(JSJavaProxy::CompletableFuture(
-        completable_future_ptr.try_into().unwrap(),
+    Ok(JSJavaProxy::CompletableFuture(
+        completable_future_ptr,
         promise_ptr,
-    ));
+    ))
 }

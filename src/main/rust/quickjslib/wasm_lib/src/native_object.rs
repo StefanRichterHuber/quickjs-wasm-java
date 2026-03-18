@@ -7,7 +7,7 @@ use crate::js_to_java_proxy::JSJavaProxy;
 #[wasm_export]
 pub fn object_create(ctx: &Ctx<'_>) -> rquickjs::Result<Option<Box<Persistent<Object<'static>>>>> {
     let js_object = rquickjs::Object::new(ctx.clone())?;
-    let persistent = Persistent::save(&ctx, js_object);
+    let persistent = Persistent::save(ctx, js_object);
     let result = Box::new(persistent);
     Ok(Some(result))
 }
@@ -23,7 +23,7 @@ pub fn object_size(
     ctx: &Ctx<'_>,
     persistent_object: &Persistent<Object<'static>>,
 ) -> rquickjs::Result<i32> {
-    let v = persistent_object.clone().restore(&ctx)?;
+    let v = persistent_object.clone().restore(ctx)?;
     Ok(v.len() as i32)
 }
 
@@ -33,7 +33,7 @@ pub fn object_contains_key(
     persistent_object: &Persistent<Object<'static>>,
     key: JSJavaProxy,
 ) -> rquickjs::Result<bool> {
-    let v = persistent_object.clone().restore(&ctx)?;
+    let v = persistent_object.clone().restore(ctx)?;
     v.contains_key(key)
 }
 
@@ -60,7 +60,7 @@ pub fn object_remove_value(
     persistent_object: &Persistent<Object<'static>>,
     key: JSJavaProxy,
 ) -> rquickjs::Result<bool> {
-    let v = persistent_object.clone().restore(&ctx)?;
+    let v = persistent_object.clone().restore(ctx)?;
     v.remove(key)?;
     Ok(true)
 }
@@ -72,7 +72,7 @@ pub fn object_set_value(
     key: JSJavaProxy,
     value: JSJavaProxy,
 ) -> rquickjs::Result<bool> {
-    let v = persistent_object.clone().restore(&ctx)?;
+    let v = persistent_object.clone().restore(ctx)?;
     v.set(key, value)?;
     Ok(true)
 }
@@ -82,7 +82,7 @@ pub fn object_key_set(
     ctx: &Ctx<'_>,
     persistent_object: &Persistent<Object<'static>>,
 ) -> rquickjs::Result<JSJavaProxy> {
-    let v = persistent_object.clone().restore(&ctx)?;
+    let v = persistent_object.clone().restore(ctx)?;
 
     let object_keys: ObjectKeysIter<'_, JSJavaProxy> = v.keys();
 

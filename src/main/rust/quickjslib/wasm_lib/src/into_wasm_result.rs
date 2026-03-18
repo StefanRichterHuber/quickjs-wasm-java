@@ -18,6 +18,7 @@ impl IntoWasmResult for JSJavaProxy {
 
 /// Converts a Box<T> into a u64 that can be returned to Java (by returning the pointer to the object)
 impl<T> IntoWasmResult for Box<T> {
+    #[inline]
     fn into_wasm(self) -> u64 {
         // return the pointer to the object
         let ptr = Box::into_raw(self);
@@ -25,9 +26,13 @@ impl<T> IntoWasmResult for Box<T> {
     }
 }
 
-/// Converts a Option<Box<T>> into a u64 that can be returned to Java (by returning the pointer to the object).
-///  For None 0 is returned
-impl<T> IntoWasmResult for Option<Box<T>> {
+/// Converts an Option<IntoWasmResult> into a u64 that can be returned to Java (by returning the pointer to the object).
+/// For None 0 is returned
+impl<T> IntoWasmResult for Option<T>
+where
+    T: IntoWasmResult,
+{
+    #[inline]
     fn into_wasm(self) -> u64 {
         match self {
             Some(v) => v.into_wasm(),
@@ -49,6 +54,7 @@ impl IntoWasmResult for String {
 
 /// Converts a bool into a u64 that can be returned to Java (by returning 1 for true and 0 for false)
 impl IntoWasmResult for bool {
+    #[inline]
     fn into_wasm(self) -> u64 {
         if self {
             1
@@ -60,6 +66,7 @@ impl IntoWasmResult for bool {
 
 /// Converts an i32 into a u64 that can be returned to Java (by returning the value as is)
 impl IntoWasmResult for i32 {
+    #[inline]
     fn into_wasm(self) -> u64 {
         self as u64
     }
@@ -67,14 +74,15 @@ impl IntoWasmResult for i32 {
 
 /// Converts a u32 into a u64 that can be returned to Java (by returning the value as is)
 impl IntoWasmResult for u32 {
+    #[inline]
     fn into_wasm(self) -> u64 {
         self as u64
     }
 }
 
 /// Converts an i64 into a u64 that can be returned to Java (by returning the value as is)
-///
 impl IntoWasmResult for i64 {
+    #[inline]
     fn into_wasm(self) -> u64 {
         self as u64
     }
@@ -82,7 +90,24 @@ impl IntoWasmResult for i64 {
 
 /// Converts a u64 into a u64 that can be returned to Java (by returning the value as is)
 impl IntoWasmResult for u64 {
+    #[inline]
     fn into_wasm(self) -> u64 {
-        self as u64
+        self
+    }
+}
+
+/// Converts a f32 into a u64 (by bit representation not by value)
+impl IntoWasmResult for f32 {
+    #[inline]
+    fn into_wasm(self) -> u64 {
+       self.to_bits().into_wasm() 
+    }
+}
+
+/// Converts a f64 into a u64 (by bit representation not by value)
+impl IntoWasmResult for f64 {
+    #[inline]
+    fn into_wasm(self) -> u64 {
+       self.to_bits().into_wasm() 
     }
 }

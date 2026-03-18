@@ -6,7 +6,7 @@ use crate::js_to_java_proxy::JSJavaProxy;
 #[wasm_export]
 pub fn array_create(ctx: &Ctx<'_>) -> rquickjs::Result<Option<Box<Persistent<Array<'static>>>>> {
     let js_array = rquickjs::Array::new(ctx.clone()).unwrap();
-    let persistent = Persistent::save(&ctx, js_array);
+    let persistent = Persistent::save(ctx, js_array);
     let result = Box::new(persistent);
     Ok(Some(result))
 }
@@ -22,7 +22,7 @@ pub fn array_size(
     ctx: &Ctx<'_>,
     persistent_array: &Persistent<Array<'static>>,
 ) -> rquickjs::Result<i32> {
-    let v = persistent_array.clone().restore(&ctx)?;
+    let v = persistent_array.clone().restore(ctx)?;
     Ok(v.len() as i32)
 }
 
@@ -33,7 +33,7 @@ pub fn array_add(
     index: i32,
     value: JSJavaProxy,
 ) -> rquickjs::Result<bool> {
-    let array = persistent_array.clone().restore(&ctx)?;
+    let array = persistent_array.clone().restore(ctx)?;
     splice_array(array, index, 0, Some(value))?;
     Ok(true)
 }
@@ -45,7 +45,7 @@ pub fn array_set(
     index: i32,
     value: JSJavaProxy,
 ) -> rquickjs::Result<bool> {
-    let array = persistent_array.clone().restore(&ctx)?;
+    let array = persistent_array.clone().restore(ctx)?;
 
     array.set(index as usize, value)?;
     Ok(true)
@@ -57,7 +57,7 @@ pub fn array_get(
     persistent_array: &Persistent<Array<'static>>,
     index: i32,
 ) -> rquickjs::Result<JSJavaProxy> {
-    let array = persistent_array.clone().restore(&ctx)?;
+    let array = persistent_array.clone().restore(ctx)?;
 
     array.get(index as usize)?
 }
@@ -68,7 +68,7 @@ pub fn array_remove(
     persistent_array: &Persistent<Array<'static>>,
     index: i32,
 ) -> rquickjs::Result<bool> {
-    let array = persistent_array.clone().restore(&ctx)?;
+    let array = persistent_array.clone().restore(ctx)?;
 
     splice_array(array, index, 1, None)?;
 

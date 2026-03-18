@@ -11,12 +11,12 @@ use wasm_macros::wasm_export;
 use crate::js_to_java_proxy::JSJavaProxy;
 
 #[wasm_export]
-pub fn call_function<'js>(
+pub fn call_function(
     ctx: &Ctx<'_>,
     persistent_function: &Persistent<Function<'static>>,
     args: JSJavaProxy,
 ) -> rquickjs::Result<JSJavaProxy> {
-    let function = persistent_function.clone().restore(&ctx)?;
+    let function = persistent_function.clone().restore(ctx)?;
     debug!("Calling function with args: {:?}", args);
     function.call(args)?
 }
@@ -75,7 +75,7 @@ impl JavaFunction {
                     JSJavaProxy::Undefined
                 }
             };
-            crate::dealloc(result_ptr as *mut u8, result_len);
+            unsafe { crate::dealloc(result_ptr as *mut u8, result_len) };
 
             debug!(
                 "Calling Java function: {} on context {} with arg: {:?} -> {:?}",
@@ -113,7 +113,7 @@ impl<'js, P> IntoJsFunc<'js, P> for JavaFunction {
 
         // If the result is an exception, throw it
         if let JSJavaProxy::Exception(message, _stacktrace) = &result {
-            let exception = rquickjs::Exception::from_message(params.ctx().clone(), &message)?;
+            let exception = rquickjs::Exception::from_message(params.ctx().clone(), message)?;
             Err(params.ctx().throw(exception.into_value()))
         } else {
             result.into_js(params.ctx())

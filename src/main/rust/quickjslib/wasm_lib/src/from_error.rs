@@ -40,12 +40,12 @@ impl<'js, T> FromError<'js> for Option<Box<T>> {
                     error!("Failed to call js {}: {}", message, stacktrace);
                     None
                 } else {
-                    error!("Failed to call js {}", err.to_string());
+                    error!("Failed to call js {}", err);
                     None
                 }
             }
             _ => {
-                error!("Failed to call js {}", err.to_string());
+                error!("Failed to call js {}", err);
                 None
             }
         }
@@ -65,12 +65,12 @@ impl<'js> FromError<'js> for bool {
                     error!("Failed to call js {}: {}", message, stacktrace);
                     false
                 } else {
-                    error!("Failed to call js {}", err.to_string());
+                    error!("Failed to call js {}", err);
                     false
                 }
             }
             _ => {
-                error!("Failed to call js {}", err.to_string());
+                error!("Failed to call js {}", err);
                 false
             }
         }
@@ -90,12 +90,12 @@ impl<'js> FromError<'js> for i32 {
                     error!("Failed to call js {}: {}", message, stacktrace);
                     -1
                 } else {
-                    error!("Failed to call js {}", err.to_string());
+                    error!("Failed to call js {}", err);
                     -1
                 }
             }
             _ => {
-                error!("Failed to call js {}", err.to_string());
+                error!("Failed to call js {}", err);
                 -1
             }
         }

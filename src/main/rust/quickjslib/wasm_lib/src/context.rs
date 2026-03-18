@@ -48,7 +48,7 @@ pub fn eval_script(ctx: &Ctx<'_>, script: String) -> rquickjs::Result<JSJavaProx
 pub fn eval_script_async(ctx: &Ctx<'_>, script: String) -> rquickjs::Result<JSJavaProxy> {
     debug!("Evaluating async script: {}", script);
     let promise = ctx.eval_promise(script)?;
-    let result = JSJavaProxy::from_js(&ctx, promise.into_value())?;
+    let result = JSJavaProxy::from_js(ctx, promise.into_value())?;
     Ok(result)
 }
 
@@ -93,7 +93,7 @@ pub fn get_global(ctx: &Ctx<'_>, name: String) -> rquickjs::Result<JSJavaProxy> 
 }
 
 thread_local! {
-    static CONTEXT_STACK: RefCell<Vec<(u64, Ctx<'static>)>> = RefCell::new(Vec::new());
+    static CONTEXT_STACK: RefCell<Vec<(u64, Ctx<'static>)>> = const { RefCell::new(Vec::new()) };
 }
 
 /// Helper function to get a Ctx from a Context, handling re-entrancy.

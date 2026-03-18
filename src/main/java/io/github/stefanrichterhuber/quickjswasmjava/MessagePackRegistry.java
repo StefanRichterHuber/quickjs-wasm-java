@@ -276,8 +276,7 @@ class MessagePackRegistry {
      * @return The object
      */
     Object unpack(byte[] obj) {
-        MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(obj);
-        try {
+        try (MessageUnpacker unpacker = MessagePack.newDefaultUnpacker(obj)) {
             return this.unpack(unpacker);
         } catch (IOException e) {
             throw new RuntimeException("Unable to unpack object", e);
