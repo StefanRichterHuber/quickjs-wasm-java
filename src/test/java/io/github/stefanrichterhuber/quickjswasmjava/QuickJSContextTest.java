@@ -544,6 +544,64 @@ public class QuickJSContextTest {
 
     }
 
+    @Test
+    public void testModuleImport() throws Exception {
+        var moduleScript = "export function add(a, b) { return a+b; }";
+        var mainScript = "import { add } from 'module.js'; add(1, 2)";
+
+        var resolver = new QuickJSRuntime.ModuleResolver() {
+            @Override
+            public String normalize(String path, String base) {
+                return path;
+            }
+
+            @Override
+            public String load(String module) {
+                assertEquals("module.js", module);
+                return moduleScript;
+            }
+        };
+
+        try (QuickJSRuntime runtime = new QuickJSRuntime().withModuleResolver(resolver);
+             QuickJSContext context = runtime.createContext()) {
+            var promise = context.evalModule("test.js", mainScript);
+            promise.whenComplete((object, throwable) -> {
+                assertEquals(3, object);
+            });
+        }
+    }
+
+    @Test
+    public void testModuleGlobal() throws Exception {
+        var moduleScript = "let a = 0; export function set(x) { a=x; }; export function get() { return a; }";
+        var mainScript = "import { set } from 'module.js'; set(12)";
+        var secondaryScript = "import { get } from 'module.js'; get()";
+
+        var resolver = new QuickJSRuntime.ModuleResolver() {
+            @Override
+            public String normalize(String path, String base) {
+                return path;
+            }
+
+            @Override
+            public String load(String module) {
+                assertEquals("module.js", module);
+                return moduleScript;
+            }
+        };
+
+        try (QuickJSRuntime runtime = new QuickJSRuntime().withModuleResolver(resolver);
+             QuickJSContext context = runtime.createContext()) {
+            var promise = context.evalModule("first.js", mainScript);
+            promise.whenComplete((o, t) -> {
+                var promise2 = context.evalModule("second.js", secondaryScript);
+                promise2.whenComplete((o2, t2) -> {
+                    assertEquals(3, o2);
+                });
+            });
+        }
+    }
+
     /**
      * JS exceptions thrown in the script are wrapped as QuickJSException
      * 

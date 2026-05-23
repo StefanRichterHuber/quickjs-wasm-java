@@ -50,6 +50,11 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     private final ExportFunction eval;
 
     /**
+     * The native evalModule function.
+     */
+    private final ExportFunction evalModule;
+
+    /**
      * The native eval with async support function.
      */
     private final ExportFunction evalAsync;
@@ -114,6 +119,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         this.createContext = runtime.getInstance().export("create_context_wasm");
         this.closeContext = runtime.getInstance().export("close_context_wasm");
         this.eval = runtime.getInstance().export("eval_script_wasm");
+        this.evalModule = runtime.getInstance().export("eval_module_wasm");
         this.setGlobal = runtime.getInstance().export("set_global_wasm");
         this.getGlobal = runtime.getInstance().export("get_global_wasm");
         this.invoke = runtime.getInstance().export("invoke_wasm");
@@ -284,6 +290,22 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
                 ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
             long[] result = eval.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
             return handleNativeResult(result);
+        }
+    }
+
+    /**
+     * Evaluates a module in the QuickJS context.
+     *
+     * @param name The name of the module.
+     * @param script The script to evaluate.
+     * @return The result of the script.
+     */
+    public CompletableFuture<Object> evalModule(String name, String script) {
+        try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);
+                final MemoryLocation nameLocation = this.writeStringToMemory(name);
+                ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
+            long[] result = evalModule.apply(contextPtr, nameLocation.pointer(), nameLocation.length(), scriptLocation.pointer(), scriptLocation.length());
+            return (CompletableFuture<Object>) handleNativeResult(result);
         }
     }
 

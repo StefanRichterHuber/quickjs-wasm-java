@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
+import java.nio.charset.StandardCharsets;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -80,6 +81,11 @@ public final class QuickJSRuntime implements AutoCloseable {
     private final ExportFunction setMemoryLimit;
 
     /**
+     * The native setLoader function
+     */
+    private final ExportFunction setLoader;
+
+    /**
      * Map of contexts belonging to this runtime.
      */
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
@@ -95,6 +101,28 @@ public final class QuickJSRuntime implements AutoCloseable {
      * script meets its runtime limits
      */
     private long scriptStartTime = -1;
+
+    /**
+     * User created module resolver
+     */
+    public interface ModuleResolver {
+        /**
+         *
+         * @param path the non normalized path from the import statement
+         * @param base the normalized path of the calling module
+         * @return return the normalized module path
+         */
+        String normalize(String path, String base);
+
+        /**
+         *
+         * @param module the normalized path of the module
+         * @return script
+         */
+        String load(String module);
+    }
+
+    private ModuleResolver moduleResolver;
 
     /**
      * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
@@ -114,6 +142,7 @@ public final class QuickJSRuntime implements AutoCloseable {
         this.dealloc = this.instance.export("dealloc");
         this.closeRuntime = this.instance.export("close_runtime_wasm");
         this.setMemoryLimit = this.instance.export("set_memory_limit_runtime_wasm");
+        this.setLoader = this.instance.export("set_loader_wasm");
 
         initLogging();
 
@@ -208,8 +237,27 @@ public final class QuickJSRuntime implements AutoCloseable {
                         List.of(ValType.I64)),
                 this::completeCompletableFutureHostFunction);
 
+        HostFunction resolveModule = new HostFunction(
+                "env",
+                "resolve_module",
+                FunctionType.of(
+                        // First two params are name pointer and module, second two params are
+                        // path pointer and length, last param is pointer to result struct
+                        List.of(ValType.I32, ValType.I32, ValType.I32, ValType.I32, ValType.I32),
+                        List.of()),
+                this::resolveModuleFunction);
+
+        HostFunction loadModule = new HostFunction(
+                "env",
+                "load_module",
+                FunctionType.of(
+                        // Module name pointer, length, third param is pointer to result struct
+                        List.of(ValType.I32, ValType.I32, ValType.I32),
+                        List.of()),
+                this::loadModuleFunction);
+
         return new HostFunction[] { hostFunction, logHostFunction, interruptHandlerHostFunction,
-                createCompletableFutureHostFunction, completeCompletableFuture };
+                createCompletableFutureHostFunction, completeCompletableFuture, resolveModule, loadModule };
     }
 
     /**
@@ -254,6 +302,45 @@ public final class QuickJSRuntime implements AutoCloseable {
         }
         return context.completeCompletableFutureHostFunction(instance, (int) args[1], (int) args[2], args[3],
                 (int) args[4]);
+    }
+
+    private long[] resolveModuleFunction(Instance instance, long... args) {
+        if (moduleResolver == null) {
+            throw new RuntimeException("No module loader is set");
+        }
+
+        long basePtr = args[0];
+        long baseLength = args[1];
+        long pathPtr = args[2];
+        long pathLength = args[3];
+        long outPtr = args[4];
+
+        String base = instance.memory().readString((int)basePtr, (int)baseLength);
+        String path = instance.memory().readString((int)pathPtr, (int)pathLength);
+        String normalized = moduleResolver.normalize(path, base);
+
+        var normalizedLocation = writeStringToMemory(normalized);
+        instance.memory().writeI32((int)outPtr, (int)normalizedLocation.pointer());
+        instance.memory().writeI32((int)outPtr+4, normalizedLocation.length());
+        return new long[] {};
+    }
+
+    private long[] loadModuleFunction(Instance instance, long... args) {
+        if (moduleResolver == null) {
+            throw new RuntimeException("No module loader is set");
+        }
+
+        long namePtr = args[0];
+        long nameLength = args[1];
+        long outPtr = args[2];
+
+        String name = instance.memory().readString((int)namePtr, (int)nameLength);
+        String script = moduleResolver.load(name);
+
+        var scriptLocation = writeStringToMemory(script);
+        instance.memory().writeI32((int)outPtr, (int)scriptLocation.pointer());
+        instance.memory().writeI32((int)outPtr+4, scriptLocation.length());
+        return new long[] {};
     }
 
     /**
@@ -306,6 +393,13 @@ public final class QuickJSRuntime implements AutoCloseable {
             throw new IllegalStateException("Memory limit must not be lower than 0");
         }
         this.setMemoryLimit.apply(this.getRuntimePointer(), limit);
+        return this;
+    }
+
+    public QuickJSRuntime withModuleResolver(ModuleResolver moduleResolver) {
+        this.moduleResolver = moduleResolver;
+
+        this.setLoader.apply(this.getRuntimePointer());
         return this;
     }
 
@@ -409,6 +503,21 @@ public final class QuickJSRuntime implements AutoCloseable {
         long ptr = alloc(data.length);
         getInstance().memory().write((int) ptr, data);
         return new MemoryLocation(ptr, data.length, this);
+    }
+
+    /**
+     * Writes an raw string (without packing it to a message pack) to the memory of
+     * the QuickJS runtime.
+     *
+     * @param value The string to write to the memory.
+     * @return The memory location of the string.
+     */
+    MemoryLocation writeStringToMemory(String value) {
+        if (value == null) {
+            throw new IllegalArgumentException("string value to write to the memory must not be null");
+        }
+        final byte[] valueBytes = value.getBytes(StandardCharsets.UTF_8);
+        return this.writeToMemory(valueBytes);
     }
 
     /**
