@@ -2,7 +2,7 @@ use std::cell::RefCell;
 
 use log::debug;
 use log::error;
-use rquickjs::Context;
+use rquickjs::{Context, Module};
 use rquickjs::Ctx;
 use rquickjs::FromJs;
 use rquickjs::JsLifetime;
@@ -42,6 +42,16 @@ pub fn close_context(context: Box<Context>) {
 pub fn eval_script(ctx: &Ctx<'_>, script: String) -> rquickjs::Result<JSJavaProxy> {
     debug!("Evaluating script: {}", script);
     ctx.eval(script)
+}
+
+#[wasm_export]
+pub fn eval_module(ctx: &Ctx<'_>, name: String, script: String) -> rquickjs::Result<JSJavaProxy> {
+    debug!("Evaluating module: {}", script);
+
+    let module = Module::declare(ctx.clone(), name, script.clone())?;
+    let (_, promise) = module.eval()?;
+    let result = JSJavaProxy::from_js(ctx, promise.into_value())?;
+    Ok(result)
 }
 
 #[wasm_export]

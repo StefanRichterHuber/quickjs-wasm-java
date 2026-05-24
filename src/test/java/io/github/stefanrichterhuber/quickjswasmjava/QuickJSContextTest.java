@@ -23,6 +23,7 @@ import java.util.function.Supplier;
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
 import org.junit.jupiter.api.Test;
+import org.opentest4j.TestAbortedException;
 
 public class QuickJSContextTest {
     private static final Logger LOGGER = LogManager.getLogger();
@@ -542,6 +543,60 @@ public class QuickJSContextTest {
             }
         }
 
+    }
+
+    @Test
+    public void testModuleImport() throws Exception {
+        var moduleScript = "export function add(a, b) { return a+b; }";
+        var mainScript = "import { add } from 'module.js'; globalThis.result = add(1, 2)";
+
+        var resolver = new QuickJSRuntime.ModuleResolver() {
+            @Override
+            public String normalize(String path, String base) {
+                return path;
+            }
+
+            @Override
+            public String load(String module) {
+                assertEquals("module.js", module);
+                return moduleScript;
+            }
+        };
+
+        try (QuickJSRuntime runtime = new QuickJSRuntime().withModuleResolver(resolver);
+             QuickJSContext context = runtime.createContext()) {
+            context.evalModule("test.js", mainScript);
+            var result = context.getGlobal("result");
+            assertEquals(3, result);
+        }
+    }
+
+    @Test
+    public void testModuleGlobal() throws Exception {
+        var moduleScript = "let a = 0; export function set(x) { a=x; }; export function get() { return a; }";
+        var mainScript = "import { set } from 'module.js'; set(12)";
+        var secondaryScript = "import { get } from 'module.js'; globalThis.result = get()";
+
+        var resolver = new QuickJSRuntime.ModuleResolver() {
+            @Override
+            public String normalize(String path, String base) {
+                return path;
+            }
+
+            @Override
+            public String load(String module) {
+                assertEquals("module.js", module);
+                return moduleScript;
+            }
+        };
+
+        try (QuickJSRuntime runtime = new QuickJSRuntime().withModuleResolver(resolver);
+             QuickJSContext context = runtime.createContext()) {
+            context.evalModule("first.js", mainScript);
+            context.evalModule("second.js", secondaryScript);
+            var result = context.getGlobal("result");
+            assertEquals(12, result);
+        }
     }
 
     /**
