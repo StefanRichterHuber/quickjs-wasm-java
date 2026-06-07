@@ -3,6 +3,7 @@ package io.github.stefanrichterhuber.quickjswasmjava;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 
 import org.apache.logging.log4j.Level;
@@ -80,6 +81,11 @@ public final class QuickJSRuntime implements AutoCloseable {
     private final ExportFunction setMemoryLimit;
 
     /**
+     * The native setPromiseRejectionTracker
+     */
+    private final ExportFunction setPromiseRejectionTracker;
+
+    /**
      * Map of contexts belonging to this runtime.
      */
     private final Map<Long, QuickJSContext> contexts = new HashMap<>();
@@ -95,6 +101,19 @@ public final class QuickJSRuntime implements AutoCloseable {
      * script meets its runtime limits
      */
     private long scriptStartTime = -1;
+
+    @FunctionalInterface
+    public interface RejectedPromiseHandler {
+        /**
+         *
+         * @param promise The promise that was rejected
+         * @param reason The reason for the exception
+         * @param isHandled Whether the exception has been handled
+         */
+        void handle(CompletableFuture<Object> promise, QuickJSException reason, boolean isHandled);
+    }
+
+    private RejectedPromiseHandler rejectedPromiseHandler;
 
     /**
      * Creates a new QuickJSRuntime. Loads the wasm library from the classpath and
@@ -114,6 +133,7 @@ public final class QuickJSRuntime implements AutoCloseable {
         this.dealloc = this.instance.export("dealloc");
         this.closeRuntime = this.instance.export("close_runtime_wasm");
         this.setMemoryLimit = this.instance.export("set_memory_limit_runtime_wasm");
+        this.setPromiseRejectionTracker = this.instance.export("set_promise_rejection_tracker_wasm");
 
         initLogging();
 
@@ -208,8 +228,16 @@ public final class QuickJSRuntime implements AutoCloseable {
                         List.of(ValType.I64)),
                 this::completeCompletableFutureHostFunction);
 
+        HostFunction handleRejectedPromise = new HostFunction(
+                "env",
+                "handle_rejected_promise",
+                FunctionType.of(
+                        List.of(ValType.I64, ValType.I64, ValType.I32, ValType.I32, ValType.I32),
+                        List.of()),
+                this::handleRejectedPromiseFunction);
+
         return new HostFunction[] { hostFunction, logHostFunction, interruptHandlerHostFunction,
-                createCompletableFutureHostFunction, completeCompletableFuture };
+                createCompletableFutureHostFunction, completeCompletableFuture, handleRejectedPromise };
     }
 
     /**
@@ -254,6 +282,33 @@ public final class QuickJSRuntime implements AutoCloseable {
         }
         return context.completeCompletableFutureHostFunction(instance, (int) args[1], (int) args[2], args[3],
                 (int) args[4]);
+    }
+
+    private long[] handleRejectedPromiseFunction(Instance instance, long... args) {
+        if (rejectedPromiseHandler == null) {
+            throw new RuntimeException("No rejected promise handler is set");
+        }
+
+        long contextPtr = args[0];
+        long promisePtr = args[1];
+        long exceptionPtr = args[2];
+        long exceptionLen = args[3];
+        boolean isHandled = args[4] == 1;
+
+        final QuickJSContext context = contexts.get(contextPtr);
+        if (context == null) {
+            throw new RuntimeException("Context not found: " + contextPtr);
+        }
+
+        final QuickJSPromise promise = new QuickJSPromise(context, promisePtr);
+        //String reason = instance.memory().readString((int)reasonPtr, (int)reasonLength);
+        //Object reason = context.handleNativeResult(new long[] {reasonPtr});
+
+        try (MemoryLocation argsLocation = new MemoryLocation(exceptionPtr, (int) exceptionLen, this)) {
+            final Object exception = context.unpackObjectFromMemory(argsLocation);
+            rejectedPromiseHandler.handle(promise, (QuickJSException)exception, isHandled);
+        }
+        return new long[]{};
     }
 
     /**
@@ -306,6 +361,12 @@ public final class QuickJSRuntime implements AutoCloseable {
             throw new IllegalStateException("Memory limit must not be lower than 0");
         }
         this.setMemoryLimit.apply(this.getRuntimePointer(), limit);
+        return this;
+    }
+
+    public QuickJSRuntime withRejectedPromiseHandler(RejectedPromiseHandler rejectedPromiseHandler) {
+        this.rejectedPromiseHandler = rejectedPromiseHandler;
+        this.setPromiseRejectionTracker.apply(this.getRuntimePointer());
         return this;
     }
 
