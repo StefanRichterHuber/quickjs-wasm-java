@@ -14,6 +14,7 @@ import java.util.Set;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicInteger;
+import java.util.concurrent.atomic.AtomicReference;
 import java.util.function.BiConsumer;
 import java.util.function.BiFunction;
 import java.util.function.Consumer;
@@ -569,6 +570,35 @@ public class QuickJSContextTest {
                 assertEquals("    at <eval> (eval_script:4:11)\n",
                         quickJSException.getStack());
                 LOGGER.debug(e.getMessage());
+            }
+        }
+    }
+
+    @Test
+    public void testExceptionHandlingAsync() throws Exception {
+        AtomicReference<QuickJSException> error = new AtomicReference<>();
+        try (QuickJSRuntime runtime = new QuickJSRuntime()
+                .withRejectedPromiseHandler((promise, reason, isHandled) -> {
+                    error.set(reason);
+                });
+             QuickJSContext context = runtime.createContext()) {
+
+            var promise = context.evalAsync("""
+                    let a = 1;
+                    let b = 0;
+                    let c = a / b;
+                    throw new Error('test');
+                    """);
+
+            while (context.poll()) {}
+
+            try {
+                promise.join();
+                fail("Exception should have been thrown");
+            } catch (Exception e) {
+                var result = error.getAndSet(null);
+                assertEquals("test", result.getRawMessage());
+                assertEquals("    at <eval> (eval_script:4:11)\n", result.getStack());
             }
         }
     }
