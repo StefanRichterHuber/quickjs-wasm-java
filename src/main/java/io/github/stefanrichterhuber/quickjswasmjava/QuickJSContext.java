@@ -445,8 +445,19 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         } else {
             @SuppressWarnings("unchecked")
             final Function<List<Object>, Object> function = (args) -> {
-                Object arg = args != null && args.size() > 0 ? args.get(0) : null;
-                Object result = value.apply((P) arg);
+                boolean expectsList = false;
+                Object result;
+                try {
+                    // If the function is expecting a List<Object>, then pass it in as supplied.
+                    P tmp = (P) args;
+                    expectsList = true;
+                } catch (ClassCastException e) { }
+                if (expectsList) {
+                    result = value.apply((P) args);
+                } else {
+                    Object arg = args != null && args.size() > 0 ? args.get(0) : null;
+                    result = value.apply((P) arg);
+                }
                 return result;
             };
             setGlobal(name, (Object) function);
