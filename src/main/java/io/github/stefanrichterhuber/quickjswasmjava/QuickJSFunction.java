@@ -33,6 +33,11 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
      */
     private final ExportFunction call;
 
+    /**
+     * The native construct function.
+     */
+    private final ExportFunction construct;
+
     private final ExportFunction close;
 
     /**
@@ -47,6 +52,7 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
         this.name = name;
         this.functionPtr = functionPtr;
         this.call = context.getRuntime().getInstance().export("call_function_wasm");
+        this.construct = context.getRuntime().getInstance().export("construct_function_wasm");
         this.close = context.getRuntime().getInstance().export("close_function_wasm");
         context.addDependentResource(this::close);
     }
@@ -67,6 +73,26 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
         try (final ScriptDurationGuard guard = new ScriptDurationGuard(this.context.getRuntime());
                 final MemoryLocation memoryLocation = context.writeToMemory(params)) {
             final long[] result = call.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
+                    memoryLocation.length());
+
+            return this.context.handleNativeResult(result);
+        }
+    }
+
+    /**
+     * Calls the constructor function with the given arguments
+     * 
+     * @param args the arguments to pass to the function
+     * @return the result of the function call
+     */
+    public Object construct(Object... args) {
+        final List<Object> params = args == null || args.length == 0 ? List.of() : List.of(args);
+
+        // Don't close the memory location here, because it will be used by the wasm
+        // function
+        try (final ScriptDurationGuard guard = new ScriptDurationGuard(this.context.getRuntime());
+                final MemoryLocation memoryLocation = context.writeToMemory(params)) {
+            final long[] result = construct.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
                     memoryLocation.length());
 
             return this.context.handleNativeResult(result);

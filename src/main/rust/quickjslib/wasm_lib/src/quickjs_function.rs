@@ -22,6 +22,25 @@ pub fn call_function(
 }
 
 #[wasm_export]
+pub fn construct_function(
+    ctx: &Ctx<'_>,
+    persistent_function: &Persistent<Function<'static>>,
+    args: JSJavaProxy,
+) -> rquickjs::Result<JSJavaProxy> {
+    let function = persistent_function.clone().restore(ctx)?;
+    let result = if function.is_constructor() {
+        let function = function.as_constructor().unwrap();
+        debug!("Calling constructor with args: {:?}", args);
+        let result: JSJavaProxy = function.construct(args)?;
+        Ok(result)
+    } else {
+        error!("Function is not a constructor");
+        Err(rquickjs::Error::Exception)
+    };
+    result
+}
+
+#[wasm_export]
 pub fn close_function(_context: &Context, object: Box<Persistent<Function<'static>>>) -> bool {
     debug!("Closing js function wrapper");
     drop(object);

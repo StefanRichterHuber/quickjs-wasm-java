@@ -840,4 +840,24 @@ public class QuickJSContextTest {
         }
     }
 
+    /**
+     * Test constructors
+     */
+    @Test
+    public void testConstructors() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime();
+                QuickJSContext context = runtime.createContext()) {
+
+            String s = "class Foo { constructor(x) { this.a = x; } }";
+            context.eval(s);
+
+            Object o = context.construct("Foo", 1);
+            assertTrue(o instanceof QuickJSObject);
+
+            QuickJSObject object = (QuickJSObject)o;
+            o = object.get("a");
+            assertEquals(1, o);
+        }
+    }
+
 }

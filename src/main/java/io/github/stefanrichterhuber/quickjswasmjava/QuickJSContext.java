@@ -262,6 +262,32 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
     }
 
     /**
+     * Invoke a constructor function in the QuickJS context.
+     * 
+     * @param name The name of the class to instantiate.
+     * @param args The arguments to pass to the constructor function.
+     * @return The result of the function.
+     */
+    public Object construct(String name, Object... args) {
+        // A class definition like "class X { }" does not create an object in globalThis.
+        // It seems the only way to retrieve a reference is by querying the global lexical
+        // binding - i.e. call "eval".
+        // Only do this on a string that evaluates to a single identifier, and if it's a
+        // function, call construct(). It's verified as a constructor-function within WASM.
+        if (name == null || name.isEmpty()) {
+            throw new IllegalArgumentException("Name must not be null or empty");
+        }
+        if (!QuickJSRuntime.isIdentifier(name)) {
+            throw new IllegalArgumentException("Name is not a syntactically-valid class name");
+        }
+        Object constructor = eval(name);
+        if (!(constructor instanceof QuickJSFunction)) {
+            throw new IllegalArgumentException("Name \"" + name + "\" does not resolve to a function");
+        }
+        return ((QuickJSFunction) constructor).construct(args);
+    }
+
+    /**
      * Centralized result handling of native calls with an message packed result
      */
     Object handleNativeResult(long[] result) {
