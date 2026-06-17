@@ -455,4 +455,23 @@ public final class QuickJSRuntime implements AutoCloseable {
         }
         ptr = 0;
     }
+
+    /**
+     * Return true if the value is a valid JavaScript identifier
+     */
+    static boolean isIdentifier(String s) {
+        // See https://mathiasbynens.be/notes/javascript-identifiers-es6
+        if (List.of("", "do", "if", "in", "for", "let", "new", "try", "var", "case", "else", "enum", "eval", "null", "this", "true", "void", "with", "break", "catch", "class", "const", "false", "super", "throw", "while", "yield", "delete", "export", "import", "public", "return", "static", "switch", "typeof", "default", "extends", "finally", "package", "private", "continue", "debugger", "function", "arguments", "interface", "protected", "implements", "instanceof").contains(s)) {
+            return false;
+        }
+        for (int i=0;i<s.length();) {
+            int c = s.codePointAt(i);
+            boolean valid = i == 0 ? Character.isUnicodeIdentifierStart(c) : Character.isUnicodeIdentifierPart(c);
+            if (!valid) {
+                return false;
+            }
+            i += c < 0x10000 ? 1 : 2;
+        }
+        return true;
+    }
 }
