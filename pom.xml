@@ -34,7 +34,8 @@
         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
         <maven.compiler.source>21</maven.compiler.source>
         <maven.compiler.target>21</maven.compiler.target>
-        <chicory.version>1.6.1</chicory.version>
+        <chicory.version>1.7.5</chicory.version>
+        <log4j.version>2.26.1</log4j.version>
 
         <!-- Cargo profile for development. Change to 'release' for release builds -->
         <cargo.profile>dev</cargo.profile>
@@ -92,12 +93,12 @@
         <dependency>
             <groupId>org.msgpack</groupId>
             <artifactId>msgpack-core</artifactId>
-            <version>0.9.11</version>
+            <version>0.9.12</version>
         </dependency>
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-api</artifactId>
-            <version>2.23.0</version>
+            <version>${log4j.version}</version>
         </dependency>
         <dependency>
             <groupId>org.junit.jupiter</groupId>
@@ -108,7 +109,7 @@
         <dependency>
             <groupId>org.apache.logging.log4j</groupId>
             <artifactId>log4j-core</artifactId>
-            <version>2.23.0</version>
+            <version>${log4j.version}</version>
             <scope>test</scope>
         </dependency>
     </dependencies>
