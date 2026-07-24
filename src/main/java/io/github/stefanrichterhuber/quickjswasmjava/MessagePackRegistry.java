@@ -177,6 +177,7 @@ class MessagePackRegistry {
         });
 
         register("javaFunction", List.of(Function.class), new TypeHandler() {
+            @SuppressWarnings("unchecked")
             public void pack(Object o, MessagePacker p) throws IOException {
                 p.packArrayHeader(2);
                 p.packInt((int) MessagePackRegistry.this.ctx.getContextPointer());

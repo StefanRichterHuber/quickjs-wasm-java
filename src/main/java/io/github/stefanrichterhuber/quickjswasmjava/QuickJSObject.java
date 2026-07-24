@@ -94,6 +94,18 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
     }
 
     /**
+     * Asserts that the given key object is of type string, number or boolean
+     * 
+     * @param key Key object to check
+     */
+    private static void assertValidKeyType(Object key) {
+        if (key instanceof String || key instanceof Number || key instanceof Boolean) {
+            return;
+        }
+        throw new IllegalArgumentException("Key must be of type String, Number or Boolean and not null");
+    }
+
+    /**
      * Creates a native JS object
      * 
      * @param ctx QuickJS context
@@ -131,6 +143,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
 
     @Override
     public boolean containsKey(Object key) {
+        assertValidKeyType(key);
         try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
             long[] result = this.containsKey.apply(this.getContextPointer(), this.getObjectPointer(),
                     keyLocation.pointer(), keyLocation.length());
@@ -160,6 +173,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         if (key == null) {
             throw new NullPointerException("Key must not be null");
         }
+        assertValidKeyType(key);
         try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
 
             final long[] result = this.getValue.apply(this.getContextPointer(), this.getObjectPointer(),
@@ -207,7 +221,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         if (key == null) {
             throw new NullPointerException("Key must not be null");
         }
-
+        assertValidKeyType(key);
         final V oldValue = get(key);
 
         try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key);
@@ -222,6 +236,7 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
 
     @Override
     public V remove(Object key) {
+        assertValidKeyType(key);
         final V value = get(key);
 
         try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
@@ -270,8 +285,8 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
      * @return The interface.
      */
     public <T> T getInterface(Class<T> clasz) {
-        return (T) Proxy.newProxyInstance(clasz.getClassLoader(), new Class[] { clasz },
-                new ScriptInvocationHandler<K, V>(this.ctx, this));
+        return clasz.cast(Proxy.newProxyInstance(clasz.getClassLoader(), new Class[] { clasz },
+                new ScriptInvocationHandler<K, V>(this.ctx, this)));
     }
 
     /**

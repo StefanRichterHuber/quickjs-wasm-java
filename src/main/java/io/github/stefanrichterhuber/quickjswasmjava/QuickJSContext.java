@@ -157,6 +157,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         try (MemoryLocation argsLocation = new MemoryLocation(argPtr, (int) argLen, this.getRuntime())) {
             final Object realArgs = unpackObjectFromMemory(argsLocation);
 
+            @SuppressWarnings("unchecked")
             final List<Object> args = switch (realArgs) {
                 case List<?> l -> (List<Object>) l;
                 default -> List.of(realArgs);
@@ -293,11 +294,18 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param script The script to evaluate.
      * @return The result of the script.
      */
+    @SuppressWarnings("unchecked")
     public CompletableFuture<Object> evalAsync(String script) {
         try (final MemoryLocation scriptLocation = this.writeStringToMemory(script);
                 ScriptDurationGuard guard = new ScriptDurationGuard(this.runtime)) {
             long[] result = evalAsync.apply(contextPtr, scriptLocation.pointer(), scriptLocation.length());
-            return (CompletableFuture<Object>) handleNativeResult(result);
+            final Object resultobj = handleNativeResult(result);
+            if (!(resultobj instanceof CompletableFuture)) {
+                throw new IllegalStateException("Fatal error: evalAsync must return a CompletableFuture");
+            } else {
+                return CompletableFuture.class.cast(resultobj);
+            }
+
         }
     }
 
@@ -527,8 +535,8 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      */
     @Override
     public <T> T getInterface(Class<T> clasz) {
-        return (T) Proxy.newProxyInstance(clasz.getClassLoader(), new Class[] { clasz },
-                new ScriptInvocationHandler<>(this, null));
+        return clasz.cast(Proxy.newProxyInstance(clasz.getClassLoader(), new Class[] { clasz },
+                new ScriptInvocationHandler<>(this, null)));
     }
 
     /**
