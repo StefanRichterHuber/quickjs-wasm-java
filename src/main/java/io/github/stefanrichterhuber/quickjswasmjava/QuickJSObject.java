@@ -308,9 +308,9 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
             final String objectName = name.substring(0, name.indexOf("."));
 
             final Object obj = this.get(objectName);
-            if (obj instanceof QuickJSObject) {
+            if (obj instanceof QuickJSObject qobj) {
                 try {
-                    return ((QuickJSObject<?, ?>) obj).invokeFunction(functionName, args);
+                    return qobj.invokeFunction(functionName, args);
                 } catch (NoSuchMethodException e) {
                     // Catch the no such method exceptions for nested calls to only throw the
                     // exception with the correct name
@@ -321,8 +321,8 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
         }
 
         final Object f = get(name);
-        if (f instanceof QuickJSFunction) {
-            return ((QuickJSFunction) f).call(args);
+        if (f instanceof QuickJSFunction func) {
+            return func.call(args);
         } else {
             throw new NoSuchMethodException(name);
         }

@@ -35,14 +35,14 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements Invocab
         // First sync GLOBAL_SCOPE, then ENGINE_SCOPE so ENGINE_SCOPE can shadow
         // GLOBAL_SCOPE
 
-        Bindings globalBindings = context.getBindings(ScriptContext.GLOBAL_SCOPE);
+        final Bindings globalBindings = context.getBindings(ScriptContext.GLOBAL_SCOPE);
         if (globalBindings != null) {
             for (var entry : globalBindings.entrySet()) {
                 this.context.setGlobal(entry.getKey(), entry.getValue());
             }
         }
 
-        Bindings engineBindings = context.getBindings(ScriptContext.ENGINE_SCOPE);
+        final Bindings engineBindings = context.getBindings(ScriptContext.ENGINE_SCOPE);
         if (engineBindings != null) {
             for (var entry : engineBindings.entrySet()) {
                 this.context.setGlobal(entry.getKey(), entry.getValue());
@@ -50,8 +50,7 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements Invocab
         }
 
         try {
-            Object result = this.context.eval(script);
-
+            final Object result = this.context.eval(script);
             return result;
         } catch (Exception e) {
             throw new ScriptException(e);
@@ -90,25 +89,20 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements Invocab
 
     @Override
     public Object invokeMethod(Object thiz, String name, Object... args) throws ScriptException, NoSuchMethodException {
-        if (!(thiz instanceof QuickJSObject)) {
-            throw new IllegalArgumentException("Target object must be a QuickJSObject");
+        if (thiz instanceof QuickJSObject obj) {
+            return obj.invokeFunction(name, args);
+        } else {
+            throw new IllegalArgumentException("Target thiz must be a QuickJSObject");
         }
-        @SuppressWarnings("unchecked")
-        QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) thiz;
-        Object member = obj.get(name);
-        if (!(member instanceof QuickJSFunction)) {
-            throw new NoSuchMethodException("Method " + name + " not found or not a function");
-        }
-        return ((QuickJSFunction) member).call(args);
     }
 
     @Override
     public Object invokeFunction(String name, Object... args) throws ScriptException, NoSuchMethodException {
-        Object member = this.context.getGlobal(name);
-        if (!(member instanceof QuickJSFunction)) {
-            throw new NoSuchMethodException("Function " + name + " not found or not a function");
+        final Object member = this.context.getGlobal(name);
+        if (member instanceof QuickJSFunction func) {
+            return func.call(args);
         }
-        return ((QuickJSFunction) member).call(args);
+        throw new NoSuchMethodException("Function " + name + " not found or not a function");
     }
 
     @Override
@@ -118,12 +112,10 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements Invocab
 
     @Override
     public <T> T getInterface(Object thiz, Class<T> clasz) {
-        if (!(thiz instanceof QuickJSObject)) {
-            throw new IllegalArgumentException("Target object must be a QuickJSObject");
+        if (thiz instanceof QuickJSObject obj) {
+            return this.context.getInterface(obj, clasz);
         }
-        @SuppressWarnings("unchecked")
-        final QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) thiz;
-        return this.context.getInterface(obj, clasz);
+        throw new IllegalArgumentException("Target object must be a QuickJSObject");
     }
 
     /**

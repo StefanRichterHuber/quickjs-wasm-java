@@ -78,4 +78,26 @@ public class QuickJSScriptEngineTest {
         Object result = invocable.invokeMethod(obj, "add", 10, 20);
         assertEquals(30, result);
     }
+
+    @Test
+    public void testInvokeNestedMethod() throws Exception {
+        ScriptEngineManager manager = new ScriptEngineManager();
+        ScriptEngine engine = manager.getEngineByName("QuickJS");
+        Object obj = engine.eval("( {calc: { add: function(a, b) { return a + b; } } })");
+
+        Invocable invocable = (Invocable) engine;
+        Object result = invocable.invokeMethod(obj, "calc.add", 10, 20);
+        assertEquals(30, result);
+    }
+
+    @Test
+    public void testInvokeDeepNestedMethod() throws Exception {
+        ScriptEngineManager manager = new ScriptEngineManager();
+        ScriptEngine engine = manager.getEngineByName("QuickJS");
+        Object obj = engine.eval("({calculator:  {calc: { add: function(a, b) { return a + b; } } } })");
+
+        Invocable invocable = (Invocable) engine;
+        Object result = invocable.invokeMethod(obj, "calculator.calc.add", 10, 20);
+        assertEquals(30, result);
+    }
 }
