@@ -121,6 +121,7 @@ public class QuickJSScriptEngine extends AbstractScriptEngine implements Invocab
         if (!(thiz instanceof QuickJSObject)) {
             throw new IllegalArgumentException("Target object must be a QuickJSObject");
         }
+        @SuppressWarnings("unchecked")
         final QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) thiz;
         return this.context.getInterface(obj, clasz);
     }
