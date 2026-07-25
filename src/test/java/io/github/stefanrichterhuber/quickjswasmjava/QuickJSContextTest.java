@@ -666,6 +666,7 @@ public class QuickJSContextTest {
         try (QuickJSRuntime runtime = new QuickJSRuntime();
                 QuickJSContext context = runtime.createContext()) {
 
+            @SuppressWarnings("unchecked")
             QuickJSObject<String, Object> obj = (QuickJSObject<String, Object>) context.eval(
                     "let obj = {add: function(a, b) { return a + b; }, substract: function(a, b) { return a - b; }}; obj");
             assertNotNull(obj);
