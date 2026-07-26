@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
+import java.util.Arrays;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -19,6 +20,7 @@ import java.util.function.BiFunction;
 import java.util.function.Consumer;
 import java.util.function.Function;
 import java.util.function.Supplier;
+import java.util.stream.Collectors;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -209,6 +211,75 @@ public class QuickJSContextTest {
                 Object result = context.eval("a.b");
                 assertEquals(42, result);
             }
+            {
+                context.setGlobal("f1", (String v) -> v + "!");
+                Object result = context.eval("f1('Hello World')");
+                assertEquals("Hello World!", result);
+            }
+            {
+                context.setGlobal("f2", (String v, String e) -> v + e);
+                Object result = context.eval("f2('Hello World', '!')");
+                assertEquals("Hello World!", result);
+            }
+            {
+                AtomicInteger ai = new AtomicInteger(0);
+                context.setGlobal("f3", (Integer v) -> ai.set(v));
+                context.eval("f3(42)");
+                assertEquals(42, ai.get());
+            }
+            {
+                AtomicInteger ai = new AtomicInteger(0);
+                context.setGlobal("f4", (Integer v, Integer x) -> ai.set(v + x));
+                context.eval("f4(40, 2)");
+                assertEquals(42, ai.get());
+            }
+            {
+                context.setGlobal("f5", () -> 42);
+                Object result = context.eval("f5()");
+                assertEquals(42, result);
+            }
+            {
+                // If the number of arguments could not be predefined use a VarArgFunction.
+                context.setGlobal("f6",
+                        (VarArgFunction<Integer>) t -> Arrays.asList(t).stream()
+                                .collect(Collectors.summingInt(x -> (Integer) x)));
+                Object result1 = context.eval("f6(1)");
+                assertEquals(1, result1);
+                Object result2 = context.eval("f6(1,2)");
+                assertEquals(3, result2);
+                Object result3 = context.eval("f6(1,2,3)");
+                assertEquals(6, result3);
+                Object result4 = context.eval("f6(1,2,3,4)");
+                assertEquals(10, result4);
+            }
+            {
+                // Packing the very same callback instance multiple times must not
+                // register a new host function every time.
+                final int before = context.hostFunctions.size();
+                Consumer<Integer> sameCallback = v -> {
+                };
+                context.setGlobal("cbA", sameCallback);
+                context.setGlobal("cbB", sameCallback);
+                assertEquals(before + 1, context.hostFunctions.size());
+            }
+            // Issue 12
+            {
+                context.setGlobal("setTimeout", (VarArgFunction<Object>) (in) -> {
+                    try {
+                        @SuppressWarnings("unchecked")
+                        Function<List<Object>, Object> function = (Function<List<Object>, Object>) in[0];
+                        long delay = ((Number) in[1]).longValue();
+                        Thread.sleep(delay); // obviously terrible implementation, I'm just testing.
+                        function.apply(List.of());
+                    } catch (RuntimeException e) {
+                    } catch (InterruptedException e) {
+                        return e;
+                    }
+                    return null;
+                });
+                context.eval(" setTimeout(() => { true }, 1000)");
+            }
+
         }
     }
 

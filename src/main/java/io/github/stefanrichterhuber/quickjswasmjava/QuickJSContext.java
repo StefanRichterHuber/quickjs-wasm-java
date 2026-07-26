@@ -448,17 +448,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param value The function to set.
      */
     public <P, R> void setGlobal(String name, Function<P, R> value) {
-        if (value instanceof QuickJSFunction) {
-            setGlobal(name, (Object) value);
-        } else {
-            @SuppressWarnings("unchecked")
-            final Function<List<Object>, Object> function = (args) -> {
-                Object arg = args != null && args.size() > 0 ? args.get(0) : null;
-                Object result = value.apply((P) arg);
-                return result;
-            };
-            setGlobal(name, (Object) function);
-        }
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -471,11 +461,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param value The function to set.
      */
     public <P, Q, R> void setGlobal(String name, BiFunction<P, Q, R> value) {
-        @SuppressWarnings("unchecked")
-        final Function<List<Object>, Object> function = (args) -> {
-            return value.apply((P) args.get(0), (Q) args.get(1));
-        };
-        setGlobal(name, (Object) function);
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -486,12 +472,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param value The function to set.
      */
     public <P> void setGlobal(String name, Consumer<P> value) {
-        @SuppressWarnings("unchecked")
-        final Function<List<Object>, Object> function = (args) -> {
-            value.accept((P) args.get(0));
-            return null;
-        };
-        setGlobal(name, (Object) function);
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -503,12 +484,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param value The function to set.
      */
     public <P, Q> void setGlobal(String name, BiConsumer<P, Q> value) {
-        @SuppressWarnings("unchecked")
-        final Function<List<Object>, Object> function = (args) -> {
-            value.accept((P) args.get(0), (Q) args.get(1));
-            return null;
-        };
-        setGlobal(name, (Object) function);
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -519,10 +495,19 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
      * @param value The function to set.
      */
     public <R> void setGlobal(String name, Supplier<R> value) {
-        final Function<List<Object>, Object> function = (args) -> {
-            return value.get();
-        };
-        setGlobal(name, (Object) function);
+        setGlobal(name, (Object) value);
+    }
+
+    /**
+     * Imports a java function as a global function in the QuickJS context.
+     * 
+     * @param <R>   The type of the parameter of the function.
+     * 
+     * @param name  The name of the global function.
+     * @param value The function to set.
+     */
+    public <R> void setGlobal(String name, VarArgFunction<R> value) {
+        setGlobal(name, (Object) value);
     }
 
     /**
@@ -648,6 +633,7 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         }
         dependentResources.clear();
         hostFunctions.clear();
+        messagePackRegistry.clearHostFunctionCache();
 
         try {
             closeContext.apply(contextPtr);

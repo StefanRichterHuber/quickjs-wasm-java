@@ -5,12 +5,17 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.IdentityHashMap;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.concurrent.CompletableFuture;
 import java.util.concurrent.CompletionStage;
+import java.util.function.BiConsumer;
+import java.util.function.BiFunction;
+import java.util.function.Consumer;
 import java.util.function.Function;
+import java.util.function.Supplier;
 import java.util.stream.Collectors;
 
 import org.msgpack.core.MessagePack;
@@ -34,6 +39,11 @@ class MessagePackRegistry {
     // specialised object (QuickJSArray) before generic ones (List)
     private final Map<Class<?>, String> classToTag = new LinkedHashMap<>();
     private final QuickJSContext ctx;
+    // Caches the wire-format wrapper for a given Java callback (Function,
+    // Consumer, VarArgFunction, ...) by identity, so packing the *same*
+    // callback instance repeatedly reuses its existing entry in
+    // ctx.hostFunctions instead of registering a new one every time.
+    private final Map<Object, Function<List<Object>, Object>> hostFunctionCache = new IdentityHashMap<>();
 
     /**
      * Registers a new pack / unpack handler for the given type(s)
@@ -177,12 +187,17 @@ class MessagePackRegistry {
         });
 
         register("javaFunction", List.of(Function.class), new TypeHandler() {
-            @SuppressWarnings("unchecked")
             public void pack(Object o, MessagePacker p) throws IOException {
+                // wrapFunction() already registered this wrapper (or reused an
+                // existing registration for the same original callback), so just
+                // look up its stable index here instead of adding it again.
+                final int index = MessagePackRegistry.this.ctx.hostFunctions.indexOf(o);
+                if (index < 0) {
+                    throw new IllegalStateException("Java function was not registered before packing: " + o);
+                }
                 p.packArrayHeader(2);
                 p.packInt((int) MessagePackRegistry.this.ctx.getContextPointer());
-                p.packInt((int) MessagePackRegistry.this.ctx.hostFunctions.size());
-                MessagePackRegistry.this.ctx.hostFunctions.add((Function<List<Object>, Object>) o);
+                p.packInt(index);
             }
 
             public Object unpack(MessageUnpacker u) throws IOException {
@@ -270,6 +285,14 @@ class MessagePackRegistry {
     }
 
     /**
+     * Clears the host function identity cache. Called when the owning
+     * QuickJSContext is closed so cached callbacks don't outlive it.
+     */
+    void clearHostFunctionCache() {
+        hostFunctionCache.clear();
+    }
+
+    /**
      * Unpacks a java object from the given byte array containing a message
      * packed structure
      * 
@@ -340,16 +363,101 @@ class MessagePackRegistry {
             packer.packString("null");
             return;
         }
+        final Object wrappedObj = wrapFunction(obj);
 
         // Find the best matching tag based on class hierarchy
         String tag = classToTag.entrySet().stream()
-                .filter(entry -> entry.getKey().isInstance(obj))
+                .filter(entry -> entry.getKey().isInstance(wrappedObj))
                 .map(Map.Entry::getValue)
                 .findFirst()
-                .orElseThrow(() -> new RuntimeException("No handler for " + obj.getClass()));
+                .orElseThrow(() -> new RuntimeException("No handler for " + wrappedObj.getClass()));
 
         packer.packMapHeader(1);
         packer.packString(tag);
-        handlers.get(tag).pack(obj, packer);
+        handlers.get(tag).pack(wrappedObj, packer);
+    }
+
+    /**
+     * If the given object is Function, BiFunction, Consumer, BiConsumer or Supplier
+     * wrap it into a suitable Function<List<Object>, Object> to hand into the js
+     * context. Repeated calls with the same (by identity) callback instance
+     * return the previously created wrapper instead of creating and registering
+     * a new host function every time.
+     *
+     * @param Object to wrap
+     * @return wrapped function or unmodified value
+     */
+    private Object wrapFunction(Object obj) {
+        if (obj == null) {
+            return null;
+        }
+        if (obj instanceof QuickJSFunction f) {
+            return f;
+        }
+        final Function<List<Object>, Object> cached = hostFunctionCache.get(obj);
+        if (cached != null) {
+            return cached;
+        }
+        final Function<List<Object>, Object> wrapped = buildWireFunction(obj);
+        if (wrapped == null) {
+            return obj;
+        }
+        ctx.hostFunctions.add(wrapped);
+        hostFunctionCache.put(obj, wrapped);
+        return wrapped;
+    }
+
+    /**
+     * Builds the actual Function<List<Object>, Object> adapter for a supported
+     * callback shape (VarArgFunction, Function, BiFunction, Consumer,
+     * BiConsumer or Supplier).
+     *
+     * @param obj callback to adapt
+     * @return the adapter, or null if obj is not a supported callback shape
+     */
+    private Function<List<Object>, Object> buildWireFunction(Object obj) {
+        if (obj instanceof VarArgFunction f) {
+            return (args) -> f.apply(args.toArray());
+        }
+        if (obj instanceof Function f) {
+            @SuppressWarnings("unchecked")
+            final Function<Object, Object> typed = f;
+            return (args) -> {
+                final Object arg = args != null && args.size() > 0 ? args.get(0) : null;
+                return typed.apply(arg);
+            };
+        }
+        if (obj instanceof BiFunction f) {
+            @SuppressWarnings("unchecked")
+            final BiFunction<Object, Object, Object> typed = f;
+            return (args) -> {
+                final Object arg0 = args != null && args.size() > 0 ? args.get(0) : null;
+                final Object arg1 = args != null && args.size() > 1 ? args.get(1) : null;
+                return typed.apply(arg0, arg1);
+            };
+        }
+        if (obj instanceof Consumer f) {
+            @SuppressWarnings("unchecked")
+            final Consumer<Object> typed = f;
+            return (args) -> {
+                final Object arg0 = args != null && args.size() > 0 ? args.get(0) : null;
+                typed.accept(arg0);
+                return null;
+            };
+        }
+        if (obj instanceof BiConsumer f) {
+            @SuppressWarnings("unchecked")
+            final BiConsumer<Object, Object> typed = f;
+            return (args) -> {
+                final Object arg0 = args != null && args.size() > 0 ? args.get(0) : null;
+                final Object arg1 = args != null && args.size() > 1 ? args.get(1) : null;
+                typed.accept(arg0, arg1);
+                return null;
+            };
+        }
+        if (obj instanceof Supplier f) {
+            return (args) -> f.get();
+        }
+        return null;
     }
 }
