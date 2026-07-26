@@ -209,7 +209,7 @@ The library handles seamless translation between supported Java and JavaScript t
 | `java.util.function.Consumer<P>` | `function` | Java `Consumer` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `Consumer<P>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (returning `null`). |
 | `java.util.function.BiConsumer<P, Q>` | `function` | Java `BiConsumer` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `BiConsumer<P, Q>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (returning `null`). |
 | `java.util.function.Supplier<R>` | `function` | Java `Supplier` objects can be exported to JavaScript. If a JavaScript function is transferred back to Java that originated from a `Supplier<R>`, it is translated to a `java.util.function.Function<java.util.List<Object>, Object>` (with an empty argument `List`). |
-
+| `io.github.stefanrichterhuber.quickjswasmjava.VarArgFunction` | `function` | This special functional interface is a catch-all for all kinds of java methods with more than two arguments (especially any number of arguments during runtime) to import into the javascript runtime as function. How to use it: `context.setGlobal("setTimeout", (VarArgFunction<Object>) (in) -> {  /* in is always of type Object[] */ }); `|
 
 ## Technical Details
 
