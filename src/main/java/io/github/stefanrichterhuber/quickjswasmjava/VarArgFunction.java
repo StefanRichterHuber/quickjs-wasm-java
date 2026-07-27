@@ -1,5 +1,6 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
+import java.util.Arrays;
 import java.util.Objects;
 import java.util.function.Function;
 import java.util.function.UnaryOperator;
@@ -54,24 +55,9 @@ public interface VarArgFunction<R> {
         if (t == null || t.length == 0) {
             return new Object[0];
         }
-
-        int overallLen = 0;
-        for (int i = 0; i < t.length; i++) {
-            Object[] arr = t[i];
-            if (arr != null) {
-                overallLen += arr.length;
-            }
-        }
-        final Object[] args = new Object[overallLen];
-        int pos = 0;
-        for (int i = 0; i < t.length; i++) {
-            Object[] arr = t[i];
-            if (arr != null) {
-                System.arraycopy(arr, 0, args, pos, arr.length);
-                pos += arr.length;
-            }
-        }
+        final Object[] args = Arrays.stream(t).filter(Objects::nonNull).flatMap(Arrays::stream).toArray();
         return args;
+
     }
 
     /**
