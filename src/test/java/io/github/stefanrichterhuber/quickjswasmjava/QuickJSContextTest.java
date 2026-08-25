@@ -382,6 +382,19 @@ public class QuickJSContextTest {
             assertEquals(10, obj.get("a"));
             Object r3 = context.eval("a.b");
             assertEquals(null, r3);
+
+            // One can clear native objects
+            context.eval("var b = {a: 1, b: 'Hello', c: 2};");
+            @SuppressWarnings("unchecked")
+            Map<String, Object> b = (Map<String, Object>) context.getGlobal("b");
+            assertEquals(3, b.size());
+            assertEquals(1, b.get("a"));
+            assertEquals("Hello", b.get("b"));
+            assertEquals(2, b.get("c"));
+
+            b.clear();
+            assertEquals(0, b.size());
+            assertTrue(b.isEmpty());
         }
     }
 
@@ -472,6 +485,11 @@ public class QuickJSContextTest {
             assertEquals(4, array.size());
             Object r3 = context.eval("a[0]");
             assertEquals(9, r3);
+
+            // One can clear native arrays from the java side
+            assertFalse(array.isEmpty());
+            array.clear();
+            assertTrue(array.isEmpty());
 
         }
     }
@@ -926,7 +944,7 @@ public class QuickJSContextTest {
             Object o = context.construct("Foo", 1);
             assertTrue(o instanceof QuickJSObject);
 
-            QuickJSObject object = (QuickJSObject)o;
+            QuickJSObject object = (QuickJSObject) o;
             o = object.get("a");
             assertEquals(1, o);
         }
