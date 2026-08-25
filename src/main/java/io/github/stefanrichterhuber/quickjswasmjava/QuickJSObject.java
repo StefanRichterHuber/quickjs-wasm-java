@@ -238,12 +238,26 @@ public final class QuickJSObject<K, V> extends AbstractMap<K, V> {
     public V remove(Object key) {
         assertValidKeyType(key);
         final V value = get(key);
+        removeSave(key);
+        return value;
+    }
 
+    /**
+     * Removes an element without getting the previous value and without safety
+     * checks
+     * 
+     * @param key
+     */
+    private void removeSave(Object key) {
         try (final MemoryLocation keyLocation = this.ctx.writeToMemory(key)) {
             this.removeValue.apply(this.getContextPointer(), this.getObjectPointer(), keyLocation.pointer(),
                     keyLocation.length());
         }
-        return value;
+    }
+
+    @Override
+    public void clear() {
+        keySet().forEach(this::removeSave);
     }
 
     @Override
