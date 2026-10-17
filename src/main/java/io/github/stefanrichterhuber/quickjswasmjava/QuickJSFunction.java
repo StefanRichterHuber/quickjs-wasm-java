@@ -1,7 +1,6 @@
 package io.github.stefanrichterhuber.quickjswasmjava;
 
 import java.util.List;
-import java.util.function.Function;
 
 import org.apache.logging.log4j.LogManager;
 import org.apache.logging.log4j.Logger;
@@ -13,7 +12,7 @@ import io.github.stefanrichterhuber.quickjswasmjava.QuickJSRuntime.ScriptDuratio
 /**
  * Represents a quickjs native function
  */
-public final class QuickJSFunction implements Function<List<Object>, Object> {
+public final class QuickJSFunction implements VarArgFunction<Object> {
     private static final Logger LOGGER = LogManager.getLogger();
 
     /**
@@ -68,8 +67,6 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
         // being an array
         final List<Object> params = args == null || args.length == 0 ? List.of() : List.of(args);
 
-        // Don't close the memory location here, because it will be used by the wasm
-        // function
         try (final ScriptDurationGuard guard = new ScriptDurationGuard(this.context.getRuntime());
                 final MemoryLocation memoryLocation = context.writeToMemory(params)) {
             final long[] result = call.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
@@ -88,8 +85,6 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
     public Object construct(Object... args) {
         final List<Object> params = args == null || args.length == 0 ? List.of() : List.of(args);
 
-        // Don't close the memory location here, because it will be used by the wasm
-        // function
         try (final ScriptDurationGuard guard = new ScriptDurationGuard(this.context.getRuntime());
                 final MemoryLocation memoryLocation = context.writeToMemory(params)) {
             final long[] result = construct.apply(getContextPointer(), getFunctionPointer(), memoryLocation.pointer(),
@@ -143,11 +138,6 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
     }
 
     @Override
-    public Object apply(List<Object> arg0) {
-        return call(arg0);
-    }
-
-    @Override
     public String toString() {
         return String.format("function %s(...)", name);
     }
@@ -173,4 +163,10 @@ public final class QuickJSFunction implements Function<List<Object>, Object> {
             return false;
         return true;
     }
+
+    @Override
+    public Object apply(Object... t) {
+        return this.call(t);
+    }
+
 }

@@ -9,10 +9,17 @@ pub trait IntoWasmResult {
 impl IntoWasmResult for JSJavaProxy {
     fn into_wasm(self) -> u64 {
         let bytes = rmp_serde::to_vec(&self).expect("MsgPack encode failed");
-        let len = bytes.len();
-        let ptr = bytes.as_ptr();
-        std::mem::forget(bytes); // Prevent drop
-        ((ptr as u64) << 32) | (len as u64)
+        bytes.into_wasm()
+    }
+}
+
+/// Converts a generic byte array into a u64 that can be returned to java (by returning the pointer and the length of array packed into a single u64)
+impl IntoWasmResult for Vec<u8> {
+    fn into_wasm(self) -> u64 {
+        let ptr = self.as_ptr();
+        let len = self.len();
+        std::mem::forget(self); // Prevent drop
+        (ptr, len).into_wasm()
     }
 }
 
@@ -45,10 +52,20 @@ where
 impl IntoWasmResult for String {
     fn into_wasm(self) -> u64 {
         let bytes = self.as_bytes();
-        let len = bytes.len();
         let ptr = bytes.as_ptr();
+        let len = bytes.len();
         std::mem::forget(self); // Prevent drop
-        ((ptr as u64) << 32) | (len as u64)
+        (ptr, len).into_wasm()
+    }
+}
+
+/**
+ * Converts a pointer and a length to single u64
+ */
+impl IntoWasmResult for (*const u8, usize) {
+    #[inline]
+    fn into_wasm(self) -> u64 {
+        ((self.0 as u64) << 32) | (self.1 as u64)
     }
 }
 
@@ -100,7 +117,7 @@ impl IntoWasmResult for u64 {
 impl IntoWasmResult for f32 {
     #[inline]
     fn into_wasm(self) -> u64 {
-       self.to_bits().into_wasm() 
+        self.to_bits().into_wasm()
     }
 }
 
@@ -108,6 +125,6 @@ impl IntoWasmResult for f32 {
 impl IntoWasmResult for f64 {
     #[inline]
     fn into_wasm(self) -> u64 {
-       self.to_bits().into_wasm() 
+        self.to_bits().into_wasm()
     }
 }

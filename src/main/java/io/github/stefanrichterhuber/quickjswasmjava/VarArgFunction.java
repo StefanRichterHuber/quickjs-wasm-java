@@ -92,7 +92,7 @@ public interface VarArgFunction<R> {
     }
 
     /**
-     * An implemeantion of VarArgFunction just returning one constant value
+     * An implementation of VarArgFunction just returning one constant value
      * 
      * @param <R>   Type of the output
      * @param value Value to return
@@ -101,4 +101,5 @@ public interface VarArgFunction<R> {
     static <R> VarArgFunction<R> constant(R value) {
         return t -> value;
     }
+
 }
