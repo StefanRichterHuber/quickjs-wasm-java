@@ -5,6 +5,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertInstanceOf;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertNull;
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.junit.jupiter.api.Assertions.fail;
 
@@ -620,17 +621,30 @@ public class QuickJSContextTest {
     @Test
     public void testScriptMemoryLimit() throws Exception {
         try (@SuppressWarnings("resource")
-        QuickJSRuntime runtime = new QuickJSRuntime().withScriptMemoryLimit(10000);
+        QuickJSRuntime runtime = new QuickJSRuntime().withScriptMemoryLimit(1_000_000);
                 QuickJSContext context = runtime.createContext()) {
 
             try {
                 context.eval(
                         "const memoryHog = [];\nconst chunk = \"M_E_M_O_R_Y_\".repeat(100000);\nwhile (true) {memoryHog.push(chunk); }");
+                fail("Script memory limit should have been reached");
             } catch (QuickJSException e) {
-                assertEquals("out of memory", e.getMessage());
+                assertEquals("out of memory", e.getRawMessage());
             }
         }
 
+    }
+
+    /**
+     * A memory limit too low to even create a context results in an exception
+     * instead of crashing the wasm instance
+     */
+    @Test
+    @SuppressWarnings("resource") // createContext() is expected to throw, so there is nothing to close
+    public void testContextCreationFailsWithTooLowMemoryLimit() throws Exception {
+        try (QuickJSRuntime runtime = new QuickJSRuntime().withScriptMemoryLimit(10000)) {
+            assertThrows(IllegalStateException.class, runtime::createContext);
+        }
     }
 
     /**

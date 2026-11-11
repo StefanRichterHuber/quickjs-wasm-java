@@ -26,10 +26,18 @@ unsafe impl<'js> JsLifetime<'js> for ContextPtr {
 }
 
 #[wasm_export]
-pub fn create_context(runtime: &Runtime) -> Box<Context> {
-    let context = Context::full(runtime).unwrap();
-    debug!("Created new QuickJS context");
-    Box::new(context)
+pub fn create_context(runtime: &Runtime) -> Option<Box<Context>> {
+    // Returns a null pointer on failure (e.g. memory limit too low), which the Java side turns into an exception
+    match Context::full(runtime) {
+        Ok(context) => {
+            debug!("Created new QuickJS context");
+            Some(Box::new(context))
+        }
+        Err(e) => {
+            error!("Failed to create QuickJS context: {}", e);
+            None
+        }
+    }
 }
 
 #[wasm_export]

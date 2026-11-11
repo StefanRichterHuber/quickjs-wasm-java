@@ -120,7 +120,10 @@ public final class QuickJSContext implements AutoCloseable, Invocable {
         this.evalAsync = runtime.getInstance().export("eval_script_async_wasm");
         this.poll = runtime.getInstance().export("poll_wasm");
         this.contextPtr = createContext.apply(runtime.getRuntimePointer())[0];
-
+        if (this.contextPtr == 0) {
+            throw new IllegalStateException(
+                    "Failed to create QuickJS context (memory limit of the runtime might be too low)");
+        }
     }
 
     /**

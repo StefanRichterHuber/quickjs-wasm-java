@@ -116,16 +116,19 @@
                 <groupId>org.jacoco</groupId>
                 <artifactId>jacoco-maven-plugin</artifactId>
                 <version>0.8.16</version>
-                <configuration>
-                    <excludes>
-                        <exclude>**/*WasmLib*.*</exclude>
-                    </excludes>
-                </configuration>
                 <executions>
                     <execution>
                         <goals>
                             <goal>prepare-agent</goal>
                         </goals>
+                        <configuration>
+                            <!-- Skip instrumenting the classes Chicory generates from the wasm
+                            module (WasmLib, WasmLibMachine*). They are too large for JaCoCo
+                            ("Too many operations"). The agent matches dotted class names. -->
+                            <excludes>
+                                <exclude>io.github.stefanrichterhuber.quickjswasmjava.WasmLib*</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                     <execution>
                         <id>report</id>
@@ -133,6 +136,13 @@
                         <goals>
                             <goal>report</goal>
                         </goals>
+                        <configuration>
+                            <!-- Keep the generated wasm classes out of the report. The report
+                            matches class file paths. -->
+                            <excludes>
+                                <exclude>io/github/stefanrichterhuber/quickjswasmjava/WasmLib*</exclude>
+                            </excludes>
+                        </configuration>
                     </execution>
                 </executions>
             </plugin>

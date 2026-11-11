@@ -373,6 +373,8 @@ public final class QuickJSRuntime implements AutoCloseable {
      * Creates a new context for this runtime.
      * 
      * @return New QuickJS Context
+     * @throws IllegalStateException if the context could not be created, e.g.
+     *                               because the memory limit is too low
      */
     public QuickJSContext createContext() {
         QuickJSContext context = new QuickJSContext(this);
