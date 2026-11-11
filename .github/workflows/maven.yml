@@ -38,7 +38,7 @@ jobs:
       # Parse the test coverage report and comment on the PR
     - name: JaCoCo Report to PR
       id: jacoco
-      uses: madrapps/jacoco-report@v1.7.1
+      uses: madrapps/jacoco-report@v1.8.0
       with:
         paths: |
           ${{ github.workspace }}/target/site/jacoco/jacoco.xml
