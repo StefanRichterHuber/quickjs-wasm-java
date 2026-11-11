@@ -76,7 +76,7 @@ jobs:
             echo "::error::Tag $TAG already exists"; exit 1
           fi
 
-      - uses: actions-rust-lang/setup-rust-toolchain@v1
+      - uses: actions-rust-lang/setup-rust-toolchain@v2
         with:
           target: wasm32-wasip1
           # Default is "-D warnings", which turns deprecations in dependencies into hard errors
